@@ -1,0 +1,47 @@
+{
+  "agents": [
+    {
+      "role": "Principal",
+      "name": "AgentPrincipal",
+      "model": "qwen3.6-plus",
+      "description": "Agente principal de coordinación y orquestación"
+    },
+    {
+      "role": "Arquitectura y Seguridad",
+      "name": "AgentArquitecto",
+      "model": "deepseek-v4-pro",
+      "description": "Responsable de arquitectura del sistema y revisión de seguridad"
+    },
+    {
+      "role": "QA y Producto",
+      "name": "AgentQA",
+      "model": "GLM-5",
+      "description": "Control de calidad y validación de producto"
+    },
+    {
+      "role": "Performance y Resiliencia",
+      "name": "AgentPerformance",
+      "model": "minimax-m2.7",
+      "description": "Optimización de rendimiento y resiliencia del sistema"
+    },
+    {
+      "role": "Investigación y Trazabilidad",
+      "name": "AgentResearch",
+      "model": "gemini-2.5-pro",
+      "description": "Investigación técnica y trazabilidad de decisiones"
+    },
+    {
+      "role": "Build Worker",
+      "name": "KimiBuildWorker",
+      "model": "kimi-k2.6",
+      "description": "Ejecución de builds y compilaciones"
+    },
+    {
+      "role": "Build Fixer",
+      "name": "JuniorQwen",
+      "model": "MiMo 2.5V Pro",
+      "description": "Diagnóstico y corrección de builds fallidos"
+    }
+  ],
+  "last_updated": "2026-06-01"
+}

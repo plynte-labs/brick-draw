@@ -1,0 +1,52 @@
+#Cargo.toml
+[package]
+name = "brick-draw"
+version = "0.1.0"
+description = "High-performance drawing application and canvas engine using wgpu and Tauri."
+authors = ["Franguh <gitrafuh@gmail.com>"]
+edition = "2021"
+license = "GPL-3.0"
+repository = "https://github.com/franguh/brick-draw"
+keywords = ["tauri", "graphics", "wgpu", "canvas", "drawing"]
+categories = ["gui", "graphics"]
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "brick_draw_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+# Tauri & Core Plugins
+tauri = { version = "2.0.0", features = ["test"] }
+tauri-plugin-opener = "2.0.0"
+tauri-plugin-dialog = "2.0.0"
+parking_lot = "0.12"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+
+
+# Data & Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ts-rs = "8.1"
+
+# Graphics & Rendering Engine
+wgpu = "0.20" 
+# winit = "0.29"    # Para gestionar los eventos de la ventana nativa
+tiny-skia = "0.11" # Opcional: Para dibujar en la CPU muy rápido sobre un buffer native
+image = "0.24"
+
+[dev-dependencies]
+dhat = "0.3"
+
+[features]
+dhat-heap = []
+
+
