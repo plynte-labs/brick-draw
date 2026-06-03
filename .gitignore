@@ -26,9 +26,15 @@ AUDITAR.md
 Informe.md
 
 # Personal AI tooling (not for collaborators)
-.agents/
+# Versioned AI/project metadata
+!.agents/
+!.agents/skills/
+!.agents/skills/**
+!.engram/
+.engram/*
+!.engram/config.json
+
 .atl/
-.engram/
 engram/
 Agente.md
 *.prompt.md

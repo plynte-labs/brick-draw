@@ -42,6 +42,9 @@ function Should-SkipPath {
     param([string]$PathValue)
 
     return (
+        $PathValue -match '^\.env$' -or
+        $PathValue -match '^\.env\.local$' -or
+        $PathValue -match '^\.env\..*\.local$' -or
         $PathValue -match '(^|/)\.git/' -or
         $PathValue -match '(^|/)\.engram/' -or
         $PathValue -match '(^|/)\.atl/' -or

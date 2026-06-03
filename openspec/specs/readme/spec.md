@@ -54,10 +54,10 @@ The README.md MUST include a clear notice informing contributors that internal c
 
 ### Requirement: Existing Internal Documentation Preserved
 
-Non-README documentation files listed as out-of-scope (`ESTADO_TAREAS.md`, `BUGBOUNTY.md`, `conductor/tracks/`) MUST NOT be modified as part of this change.
+Non-README documentation files listed as out-of-scope (`docs/legacy/ESTADO_TAREAS.md`, `docs/legacy/BUGBOUNTY.md`, `conductor/tracks/`) MUST NOT be modified as part of this change.
 
 #### Scenario: Post-change file integrity
 
 - GIVEN the `i18n-ui-english` change has been applied
-- WHEN a developer reads `ESTADO_TAREAS.md`, `BUGBOUNTY.md`, or files in `conductor/tracks/`
+- WHEN a developer reads `docs/legacy/ESTADO_TAREAS.md`, `docs/legacy/BUGBOUNTY.md`, or files in `conductor/tracks/`
 - THEN those files SHALL remain in their original language and format
