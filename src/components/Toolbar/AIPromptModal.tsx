@@ -13,7 +13,7 @@ export const AIPromptModal = ({ onClose }: Props) => {
     // 🚀 FIX: Traemos el tamaño dinámico del lienzo
     const { forceRender, canvasSize } = useAppStore();
 
-    const [prompt, setPrompt] = useState("masterpiece, beautiful portrait, highly detailed, in the style of Artgerm and Sakimichan");
+    const [prompt, setPrompt] = useState("");
     const [strength, setStrength] = useState(0.65);
     const [isGenerating, setIsGenerating] = useState(false);
 
@@ -35,7 +35,7 @@ export const AIPromptModal = ({ onClose }: Props) => {
                 ...store.layers,
                 {
                     id: nuevoId,
-                    name: `IA: ${prompt.substring(0, 8)}...`,
+                    name: `AI: ${prompt.substring(0, 8)}...`,
                     visible: true,
                     opacity: 1.0,
                     buffer: new OffscreenCanvas(canvasSize.width, canvasSize.height),
@@ -70,7 +70,7 @@ export const AIPromptModal = ({ onClose }: Props) => {
 
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            alert(`Error al generar la imagen de IA:\n\n${errorMsg}\n\nRevisá la terminal del servidor de Python para más detalles.`);
+            alert(`Error generating AI image:\n\n${errorMsg}\n\nCheck the Python server terminal for details.`);
             console.error("Error en generación de IA:", error);
         } finally {
             setIsGenerating(false);
@@ -84,7 +84,7 @@ export const AIPromptModal = ({ onClose }: Props) => {
                 {/* Cabecera */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-950">
                     <h2 className="text-sky-400 font-bold tracking-widest flex items-center gap-2">
-                        <FaMagic /> MOTOR SDXL
+                        <FaMagic /> EXTERNAL AI
                     </h2>
                     <button onClick={onClose} className="text-neutral-500 cursor-pointer hover:text-white transition-colors">
                         <FaTimes />
@@ -95,20 +95,23 @@ export const AIPromptModal = ({ onClose }: Props) => {
                 <div className="p-6 flex flex-col gap-6">
                     <div>
                         <label className="text-xs font-mono text-neutral-400 uppercase tracking-widest mb-2 block">
-                            Prompt (Instrucción)
+                            Prompt (Instruction)
                         </label>
                         <textarea
                             className="w-full h-24 bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm text-neutral-200 focus:outline-none focus:border-sky-500 resize-y max-h-104"
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
-                            placeholder="Describe lo que quieres generar..."
+                            placeholder="Describe what you want to generate..."
                         />
+                        <p className="text-[10px] text-neutral-500 mt-2">
+                            Uses the optional AI server configured through <code>VITE_AI_SERVER_URL</code>.
+                        </p>
                     </div>
 
                     <div>
                         <div className="flex justify-between items-center mb-2">
                             <label className="text-xs font-mono text-neutral-400 uppercase tracking-widest">
-                                Fuerza (Creatividad de IA)
+                                Strength (AI Creativity)
                             </label>
                             <span className="text-sky-400 font-mono text-xs">{strength.toFixed(2)}</span>
                         </div>
@@ -122,7 +125,7 @@ export const AIPromptModal = ({ onClose }: Props) => {
                             className="w-full accent-sky-500 cursor-grab"
                         />
                         <p className="text-[10px] text-neutral-500 mt-2">
-                            0.1 = Casi sin cambios | 0.9 = Redibuja por completo tu boceto.
+                            0.1 = Almost unchanged | 0.9 = Completely redraws your sketch.
                         </p>
                     </div>
                 </div>
@@ -138,9 +141,9 @@ export const AIPromptModal = ({ onClose }: Props) => {
                             }`}
                     >
                         {isGenerating ? (
-                            <><FaSpinner className="animate-spin" /> PROCESANDO...</>
+                            <><FaSpinner className="animate-spin" /> PROCESSING...</>
                         ) : (
-                            <><FaMagic /> GENERAR</>
+                            <><FaMagic /> GENERATE</>
                         )}
                     </button>
                 </div>

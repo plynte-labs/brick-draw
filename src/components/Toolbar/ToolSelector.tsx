@@ -5,10 +5,10 @@ import { useAppStore } from '../../store/useStore';
 import { DrawingTool } from '../../store/types';
 
 const tools: { id: DrawingTool; name: string; icon: any }[] = [
-    { id: 'brush', name: 'Pincel', icon: FaBrush },
-    { id: 'eraser', name: 'Goma', icon: FaEraser },
-    { id: 'wand', name: 'Varita', icon: FaMagic },
-    { id: 'move', name: 'Mover', icon: FaArrowsAlt },
+    { id: 'brush', name: 'Brush', icon: FaBrush },
+    { id: 'eraser', name: 'Eraser', icon: FaEraser },
+    { id: 'wand', name: 'Wand', icon: FaMagic },
+    { id: 'move', name: 'Move', icon: FaArrowsAlt },
 ];
 
 export const ToolSelector: React.FC = () => {
@@ -25,7 +25,7 @@ export const ToolSelector: React.FC = () => {
 
     return (
         <section className="flex flex-col gap-3">
-            <h3 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Modo</h3>
+            <h3 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Mode</h3>
 
             <div className="grid grid-cols-2 gap-2.5">
                 {tools.map(tool => (
@@ -52,7 +52,7 @@ export const ToolSelector: React.FC = () => {
                     <FaTimesCircle />
                     {/* 🚀 Añadido el atajo visual (Ctrl+D) */}
                     <span className="text-[10px] cursor-pointer font-bold uppercase tracking-wider">
-                        Quitar Selección <span className="opacity-70">(Ctrl+D)</span>
+                        Deselect <span className="opacity-70">(Ctrl+D)</span>
                     </span>
                 </button>
             )}

@@ -10,9 +10,9 @@ export const ExportButton: React.FC = () => {
     const handleExport = async () => {
         try {
             const resSave = await saveFileDialog({
-                title: 'Exportar Obra Maestra',
-                defaultPath: 'Mi_Arte_Plynte.png',
-                filters: [{ name: 'Imagen PNG', extensions: ['png'] }]
+                title: 'Export Masterpiece',
+                defaultPath: 'My_Plynte_Art.png',
+                filters: [{ name: 'PNG Image', extensions: ['png'] }]
             });
 
             if (!resSave.success || !resSave.data) return;
@@ -23,46 +23,46 @@ export const ExportButton: React.FC = () => {
 
         } catch (error) {
             console.error(error);
-            alert("Hubo un error al exportar: " + error);
+            alert("Error exporting: " + error);
         }
     };
 
     const handleSaveProject = async () => {
         try {
             const resSave = await saveFileDialog({
-                title: 'Guardar Proyecto de Capas',
-                defaultPath: 'Lienzo_Proyecto.brick',
-                filters: [{ name: 'Proyecto Brick-Draw', extensions: ['brick'] }]
+                title: 'Save Layer Project',
+                defaultPath: 'Canvas_Project.brick',
+                filters: [{ name: 'Brick-Draw Project', extensions: ['brick'] }]
             });
 
             if (!resSave.success || !resSave.data) return;
 
             const success = await saveProject(resSave.data);
             if (success) {
-                alert("¡Proyecto .brick guardado con éxito!");
+                alert(".brick project saved successfully!");
             }
         } catch (error) {
             console.error(error);
-            alert("Hubo un error al guardar el proyecto: " + error);
+            alert("Error saving project: " + error);
         }
     };
 
     const handleLoadProject = async () => {
         try {
             const resOpen = await openFileDialog({
-                title: 'Abrir Proyecto de Capas',
-                filters: [{ name: 'Proyecto Brick-Draw', extensions: ['brick'] }]
+                title: 'Open Layer Project',
+                filters: [{ name: 'Brick-Draw Project', extensions: ['brick'] }]
             });
 
             if (!resOpen.success || !resOpen.data) return;
 
             const success = await loadProject(resOpen.data);
             if (success) {
-                alert("¡Proyecto .brick cargado con éxito!");
+                alert(".brick project loaded successfully!");
             }
         } catch (error) {
             console.error(error);
-            alert("Hubo un error al cargar el proyecto: " + error);
+            alert("Error loading project: " + error);
         }
     };
 
@@ -73,16 +73,16 @@ export const ExportButton: React.FC = () => {
                 <button
                     onClick={handleSaveProject}
                     className="flex items-center cursor-pointer justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-md active:scale-95"
-                    title="Guardar archivo .brick con capas"
+                    title="Save .brick project with layers"
                 >
-                    <FaSave className="text-xs" /> Guardar
+                    <FaSave className="text-xs" /> Save
                 </button>
                 <button
                     onClick={handleLoadProject}
                     className="flex items-center cursor-pointer justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-md active:scale-95"
-                    title="Abrir archivo .brick con capas"
+                    title="Open .brick project with layers"
                 >
-                    <FaFolderOpen className="text-xs" /> Abrir
+                    <FaFolderOpen className="text-xs" /> Open
                 </button>
             </div>
 
@@ -91,8 +91,8 @@ export const ExportButton: React.FC = () => {
                 onClick={handleExport}
                 className="w-full flex items-center cursor-pointer justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 hover:border-neutral-600 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-lg active:scale-95"
             >
-                <FaDownload className="text-xs text-indigo-400" /> Exportar PNG
+                <FaDownload className="text-xs text-indigo-400" /> Export PNG
             </button>
         </div>
     );
-};
+};

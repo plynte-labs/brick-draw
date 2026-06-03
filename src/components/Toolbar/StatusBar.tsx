@@ -53,12 +53,12 @@ export const StatusBar = () => {
 
                     {/* 🚀 CRÉDITOS GITHUB */}
                     <a
-                        href="https://github.com/franguh"
+                        href="https://github.com/plynte-labs"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="hover:text-sky-400 flex items-center gap-1.5 transition-colors text-neutral-400 font-bold tracking-wide border-l border-neutral-800 pl-6"
                     >
-                        <FaGithub className="text-[11px]" /> BRICK.DRAW BY @FRANGUH
+                        <FaGithub className="text-[11px]" /> BRICK.DRAW BY @PLYNTE-LABS
                     </a>
 
                     {/* 🚀 NUEVO: Panel de Navegación de Zoom */}

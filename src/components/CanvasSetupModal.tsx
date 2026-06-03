@@ -14,8 +14,8 @@ interface Props {
 
 const PRESETS = [
     { id: 'horizontal', name: 'Post Horizontal', width: 1080, height: 608, ratio: '1.91:1', icon: <FaMobileAlt className='rotate-90'/> },
-    { id: 'vertical-classic', name: 'Post Vertical (Clásico)', width: 1080, height: 1350, ratio: '4:5', icon: <FaMobileAlt /> },
-    { id: 'vertical-new', name: 'Post Vertical (Nuevo)', width: 1080, height: 1440, ratio: '3:4', icon: <FaMobileAlt /> },
+    { id: 'vertical-classic', name: 'Vertical Post (Classic)', width: 1080, height: 1350, ratio: '4:5', icon: <FaMobileAlt /> },
+    { id: 'vertical-new', name: 'Vertical Post (New)', width: 1080, height: 1440, ratio: '3:4', icon: <FaMobileAlt /> },
     { id: 'stories', name: 'Stories / Reels', width: 1080, height: 1920, ratio: '9:16', icon: <FaMobileAlt /> },
 ];
 
@@ -62,7 +62,7 @@ export const CanvasSetupModal: React.FC<Props> = ({ onStart, onImport }) => {
             <div className="absolute z-0 -bottom-40 -right-40 w-[600px] h-[600px] bg-blue-700/20 rounded-full blur-[150px] pointer-events-none"></div>
 
             <div className="absolute z-0 -top-40 -right-0 w-[500px] h-[500px] bg-purple-800/20 rounded-full blur-[130px] pointer-events-none"></div>
-            
+
             {/* Texto Gigante Decorativo Repetido (Patrón Tapiz) */}
             <div className="absolute inset-[-50%] flex flex-col-reverse items-center justify-center pointer-events-none select-none z-[3] rotate-[-3deg]">
                 {/* Creamos 20 filas hacia abajo */}
@@ -102,10 +102,10 @@ export const CanvasSetupModal: React.FC<Props> = ({ onStart, onImport }) => {
                 {/* Cabecera */}
                 <div className="px-6 py-5 border-b border-neutral-800 bg-neutral-950">
                     <h2 className="text-xl text-sky-400 font-bold tracking-widest flex items-center gap-3">
-                        <FaExpandArrowsAlt /> NUEVO LIENZO
+                        <FaExpandArrowsAlt /> NEW CANVAS
                     </h2>
                     <p className="text-sm text-neutral-400 mt-1">
-                        Selecciona las dimensiones para tu nueva obra de arte.
+                        Select dimensions for your new artwork.
                     </p>
                 </div>
 
@@ -149,14 +149,14 @@ export const CanvasSetupModal: React.FC<Props> = ({ onStart, onImport }) => {
                             {/* Columna Derecha: Título e Inputs */}
                             <div className="flex flex-col w-full">
                                 <span className={`font-bold ${selectedId === 'custom' ? 'text-sky-400' : 'text-neutral-200'} mb-1`}>
-                                    Personalizado
+                                    Custom
                                 </span>
 
                                 <div className="flex items-center gap-3 w-full">
                                     {/* Input Ancho */}
                                     <div className="flex-1">
                                         <label className="text-[10px] text-neutral-500 font-bold tracking-widest block mb-1">
-                                            ANCHO (PX)
+                                            WIDTH (PX)
                                         </label>
                                         <input
                                             type="number"
@@ -179,7 +179,7 @@ export const CanvasSetupModal: React.FC<Props> = ({ onStart, onImport }) => {
                                     {/* Input Alto */}
                                     <div className="flex-1">
                                         <label className="text-[10px] text-neutral-500 font-bold tracking-widest block mb-1">
-                                            ALTO (PX)
+                                            HEIGHT (PX)
                                         </label>
                                         <input
                                             type="number"
@@ -208,14 +208,14 @@ export const CanvasSetupModal: React.FC<Props> = ({ onStart, onImport }) => {
                         onClick={onImport}
                         className="flex items-center gap-2 px-5 py-2.5 bg-neutral-900 border border-neutral-800 hover:border-sky-500 hover:bg-sky-950/20 text-sky-400 rounded-lg font-bold tracking-wider cursor-pointer transition-all duration-300 text-xs uppercase"
                     >
-                        <FaFolderOpen /> ABRIR PROYECTO (.brick)
+                        <FaFolderOpen /> OPEN PROJECT (.brick)
                     </button>
 
                     <button
                         onClick={handleStart}
                         className="flex items-center gap-2 px-8 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-bold tracking-wider cursor-pointer transition-all shadow-[0_0_15px_rgba(14,165,233,0.4)]"
                     >
-                        <FaCheck /> CREAR LIENZO
+                        <FaCheck /> CREATE CANVAS
                     </button>
                 </div>
             </div>
@@ -223,13 +223,13 @@ export const CanvasSetupModal: React.FC<Props> = ({ onStart, onImport }) => {
             {/* Créditos en la esquina inferior derecha */}
             <div className="absolute bottom-6 right-6 z-[10] flex items-center gap-2 text-neutral-500 text-xs font-mono select-none">
                 <span>brick.draw by</span>
-                <a 
-                    href="https://github.com/franguh" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
+                <a
+                    href="https://github.com/plynte-labs"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-sky-400 hover:text-sky-300 font-bold transition-colors"
                 >
-                    <FaGithub className="text-sm" /> @franguh
+                    <FaGithub className="text-sm" /> @plynte-labs
                 </a>
             </div>
         </div>

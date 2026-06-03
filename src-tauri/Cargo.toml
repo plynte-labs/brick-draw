@@ -2,11 +2,11 @@
 [package]
 name = "brick-draw"
 version = "0.1.0"
-description = "High-performance drawing application and canvas engine using wgpu and Tauri."
-authors = ["Franguh <gitrafuh@gmail.com>"]
+description = "Desktop drawing application built with Tauri and Rust."
+authors = ["Plynte Labs"]
 edition = "2021"
-license = "GPL-3.0"
-repository = "https://github.com/franguh/brick-draw"
+license = "MIT"
+repository = "https://github.com/plynte-labs/brick-draw"
 keywords = ["tauri", "graphics", "wgpu", "canvas", "drawing"]
 categories = ["gui", "graphics"]
 readme = "README.md"
@@ -48,5 +48,4 @@ dhat = "0.3"
 
 [features]
 dhat-heap = []
-
 

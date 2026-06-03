@@ -1,63 +1,97 @@
-# Brick.Draw (Tauri + React + Typescript)
+# Brick.Draw (Tauri + React + TypeScript)
 
-**Brick.Draw** es un software creativo de uso lígero.
-Su enfoque es principalmente no consumir tanta RAM a menos que sea extrictamente necesario.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/plynte-labs/brick-draw)](https://github.com/plynte-labs/brick-draw/stargazers)
+[![Build](https://img.shields.io/badge/build-manual-lightgrey)]()
 
-## Tecnologías utilizadas
+> **Contributor Notice**: Internal code identifiers (Rust commands, TypeScript function/variable names, code comments) are currently in Spanish. An English codebase translation is tracked as a future change (`i18n-codebase-english`).
 
-React biblioteca de Javascript que permite la facilidad de construcción de interfaces interactivas, uso de hooks, reutilización de componentes (funciones), así como mejora del rendimiento al manipular el virtual DOM.
+**Brick.Draw** is a lightweight creative desktop application. Its focus is minimizing RAM consumption — only what's strictly necessary.
 
-Typescript superset de Javascript que corrige el tipado dinámico a tipado fuerte, permitiendo evitar errores comunes sucedidos en tiempo de ejecución debido al tipado dinámico de Javascript
+## Public release notes
 
-Tauri es un framework alternativa a Electron que permite renderizar aplicaciones de escritorio ligeras y rapidas permitiendo el uso de Rust (como backend).
+- License: MIT
+- Maintainer: Plynte Labs
+- AI generation is **optional** and works through an external server configured by the collaborator
+- No API keys are required by the repository itself
+- No model weights, ComfyUI workflows, or paid APIs are bundled into the project
 
-Vite es un build tool que permite un desarrollo rápido en React.
+## Tech Stack
 
-Rust es un lenguaje que su caracteristica principal es ser seguro y optimizar el manejo de memoria RAM.
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, TypeScript 5, Tailwind CSS 4, Zustand 5 |
+| Desktop | Tauri 2 |
+| Backend | Rust, tiny-skia |
+| Build | Vite, pnpm |
 
-### Características Principales
+## Quickstart
 
-**Motor de renderizado**
-**Interfaz de usuario independiente** La U.X se renderiza gracias a React.
-**Sincronicación dual de estado** Gracias al uso de Zustand.
-**Herramientas modulares**.
-**Exportación nativa** Uso de la API del sistema operativo (vía Tauri) para guardar composiciones PNG directamente en el disco duro, componiendo la imagen final utilizando `tiny-skia` en C++/Rust puro.
+```bash
+pnpm install
+pnpm tauri dev      # Development with hot reload
+pnpm tauri build    # Production build
+```
 
-### 🖥️ Frontend (La Interfaz Visual)
+## External communication
 
-* **React + TypeScript:** Proporciona un ecosistema robusto para construir una UI reactiva (Toolbar, Gestor de Capas) asegurando tipado estricto para evitar bugs en el manejo de buffers en memoria.
-* **Tailwind CSS:** Permite iterar la interfaz rápidamente sin salir del archivo `.tsx`, logrando una estética "Dark Mode" profesional con clases de utilidad.
-* **Zustand:** Se eligió sobre Redux o Context API por su capacidad de actualizar componentes específicos sin provocar re-renderizados masivos. Además, permite un control manual de la reactividad visual (`triggerRender`).
-* **OffscreenCanvas:** En lugar de usar múltiples `<canvas>` en el DOM (lo cual destruye el rendimiento), las capas se gestionan "fuera de la pantalla" en la memoria del navegador y se componen en un único `<canvas>` maestro.
+Brick.Draw only communicates with these targets:
 
-### ⚙️ Backend (El Motor Nativo)
+| Target | Required | Purpose |
+|-------|----------|---------|
+| Tauri IPC (React <-> Rust) | Yes | Local desktop communication between the UI and the native engine |
+| File system dialogs via Tauri plugins | Yes | Open/export `.brick` projects and PNG files |
+| `VITE_AI_SERVER_URL` | No | Optional HTTP endpoint for AI image generation from the current canvas |
 
-* **Tauri:** La alternativa ligera a Electron. Permite que la app pese apenas unos megabytes y consuma una fracción de la RAM, creando un puente de comunicación seguro entre JavaScript y el Sistema Operativo.
-* **Rust:** El corazón del motor. Gestiona la memoria de las capas de forma nativa (`Arc<Mutex<AppState>>`). Cuando JS dibuja, Rust registra el trazo matemático.
-* **Tiny-Skia:** Una librería de renderizado 2D en software (escrita en Rust) que compone el PNG final con precisión matemática perfecta, mezclando opacidades y modos de fusión antes de escribir al disco duro.
+### AI server contract
 
----
+- The AI feature is disabled unless `VITE_AI_SERVER_URL` is defined in `.env`
+- Brick.Draw sends a `multipart/form-data` `POST` request
+- Current fields: `image`, `prompt`, `strength`, `num_inference_steps`, `guidance_scale`, `forzar_cuadrado`
+- The endpoint is expected to return an image blob
+- The default desktop CSP allows local AI servers on `localhost` / `127.0.0.1`; remote endpoints require an explicit security review
 
-#### 🏗️ Arquitectura del Motor
+More detail: [`docs/external-communication.md`](docs/external-communication.md)
 
-El proyecto está modularizado:
+## Collaboration and trust
 
-1. **El Store (`useStore.ts` & `types.ts`):** La única fuente de la verdad. Mantiene el estado de la UI y se comunica con Rust **exclusivamente** cuando ocurren cambios destructivos (añadir/borrar/ocultar capas).
-2. **El Gestor de Renderizado (`useRenderer.ts`):** Previene el cuello de botella del *Fill Rate*. En lugar de dibujar todas las capas a cada milímetro de movimiento del lápiz, crea una "foto" de las capas inferiores y superiores. Al trazar, solo dibuja 4 elementos en pantalla.
-3. **El Secador de Trazos (`useStrokeDryer.ts`):** Escucha el evento `pointerUp` (cuando levantas el lápiz), plasma la pintura fresca en la capa activa y envía las coordenadas vectoriales a Rust para mantener el backend sincronizado.
-4. **El Comando Rust (`commands.rs`):** Escucha las peticiones de JS, reserva buffers nativos de memoria y procesa las matemáticas de mezcla gráfica.
+- Local environment files are ignored by git (`.env`, `.env.local`, `.env.*.local`)
+- Sensitive-data hooks live in [`.githooks/pre-commit`](.githooks/pre-commit) and [`.githooks/scan-sensitive.ps1`](.githooks/scan-sensitive.ps1)
+- Activate hooks after clone:
 
----
+```bash
+git config core.hooksPath .githooks
+```
 
-##### Ventajas (Pros)
+## Architecture
 
-* **Rendimiento en trazo:** Gracias al sistema de caché, dibujar se siente instantáneo y libre de lag, independientemente de la complejidad del documento.
-* **Memoria controlada:** Al usar OffscreenCanvas y delegar la exportación pesada a Rust, el hilo principal de la interfaz nunca se congela durante el guardado.
-* **Escalabilidad:** Añadir nuevas herramientas (como figuras geométricas o filtros) es sencillo gracias a la separación entre el capturador de eventos (`useDrawingEngine`) y el renderizador.
+### Frontend (The Visual Interface)
 
-##### Desventajas
+- **React + TypeScript**: Provides a robust ecosystem for building a reactive UI (Toolbar, Layer Manager) with strict typing to prevent buffer handling bugs.
+- **Tailwind CSS**: Enables rapid UI iteration without leaving `.tsx` files, achieving a professional dark-mode aesthetic with utility classes.
+- **Zustand**: Chosen over Redux or Context API for its ability to update specific components without triggering mass re-renders. Enables manual control of visual reactivity (`triggerRender`).
+- **OffscreenCanvas**: Instead of using multiple `<canvas>` elements in the DOM (which destroys performance), layers are managed off-screen in the browser's memory and composited onto a single master `<canvas>`.
 
-* **Renderizado por Software:** Actualmente, tanto el frontend (Canvas 2D) como el backend (`tiny-skia`) renderizan en CPU. Para resoluciones 4K masivas o pinceles texturizados complejos, esto podría requerir una futura migración a WebGL / WGPU (Aceleración por Tarjeta Gráfica).
-* **Complejidad de Mantenimiento:** La arquitectura de Doble Estado (JS + Rust) requiere que cualquier nueva característica gráfica deba programarse dos veces (una para la visualización web y otra para el backend nativo).
+### Backend (The Native Engine)
 
----
+- **Tauri 2**: A lightweight Electron alternative. The app weighs only a few megabytes and consumes a fraction of the RAM, creating a secure bridge between JavaScript and the operating system.
+- **Rust**: The engine's core. Manages layer memory natively (`Arc<RwLock<AppState>>`). When JS draws, Rust records the mathematical stroke.
+- **tiny-skia**: A pure Rust 2D software rendering library that composes the final PNG with pixel-perfect mathematical precision, blending opacities and fusion modes before writing to disk.
+
+### Engine Modules
+
+1. **The Store (`useStore.ts` & `types.ts`)**: The single source of truth. Maintains UI state and communicates with Rust **exclusively** during destructive changes (add/delete/hide layers).
+2. **The Render Manager (`useRenderer.ts`)**: Prevents the Fill Rate bottleneck. Instead of redrawing all layers on every pen movement, it snapshots layers above and below. While drawing, only 4 elements render on screen.
+3. **The Stroke Dryer (`useStrokeDryer.ts`)**: Listens for `pointerUp` (when you lift the pen), bakes the fresh paint onto the active layer, and sends vector coordinates to Rust to keep the backend synchronized.
+4. **The Rust Commands (`commands.rs`)**: Listens for JS requests, allocates native memory buffers, and processes graphic blending math.
+
+### Pros
+
+- **Stroke Performance**: Thanks to the cache system, drawing feels instant and lag-free regardless of document complexity.
+- **Controlled Memory**: By using OffscreenCanvas and delegating heavy export to Rust, the main UI thread never freezes during save.
+- **Scalability**: Adding new tools (geometric shapes, filters) is straightforward thanks to the separation between the event capturer (`useDrawingEngine`) and the renderer.
+
+### Cons
+
+- **Software Rendering**: Currently both frontend (Canvas 2D) and backend (`tiny-skia`) render on CPU. For massive 4K resolutions or complex textured brushes, this may require a future migration to WebGL / WGPU (GPU acceleration).
+- **Maintenance Complexity**: The dual-state architecture (JS + Rust) means any new graphics feature must be implemented twice (once for web display, once for the native backend).

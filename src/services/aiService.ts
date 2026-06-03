@@ -7,8 +7,12 @@ export const generarImagenIA = async (
   prompt: string,
   strength: number = 0.6,
 ) => {
+  if (!AI_SERVER_URL) {
+    throw new Error("AI server URL not configured. Set VITE_AI_SERVER_URL in .env");
+  }
+
   try {
-    console.log("1. Pidiendo lienzo a Rust...");
+    console.log("1. Asking Rust for canvas...");
     // Obtenemos los bytes del PNG desde Rust
     const res = await obtenerLienzoPng();
     if (!res.success) throw new Error(res.error);

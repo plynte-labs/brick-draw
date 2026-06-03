@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# ============================================================
+# brick-draw — Pre-commit Sensitive Data Scanner
+# ============================================================
+# Blocks commits containing absolute paths, secrets,
+# forbidden files, or accidental dependency artifacts.
+#
+# Activate: git config core.hooksPath .githooks
+# ============================================================
+
+VIOLATIONS=0
+
+# ---- Patterns ----
+WIN_PATH='(^|[^A-Za-z0-9_])[A-Za-z]:\\([^\\/:*?"<>|[:space:]]+\\)+[^\\/:*?"<>|[:space:]]*'
+UNIX_PATH='(^|[^A-Za-z0-9_])/(home|Users)/[^/[:space:]]+(/[^/[:space:]]+)*'
+FORBIDDEN='\.env$|\.env\.local$|\.env\..*\.local$|prompt\.md$'
+SECRETS='(sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{16,}|hf_[A-Za-z0-9]{16,}|Bearer\s+[A-Za-z0-9\-_]{20,})'
+SUBSCRIPTION='"subscription"\s*:\s*"'
+
+# ---- Get staged files, exclude hooks ----
+STAGED=$(git diff --cached --name-only 2>/dev/null || true)
+# Exclude hooks and spec files (contain detection examples, not real data)
+STAGED=$(echo "$STAGED" | grep -v '^\.githooks/' | grep -v '^openspec/specs/' || true)
+
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+echo "Scanning staged files for sensitive data..."
+
+# ---- CHECK 1: Forbidden files ----
+FORBIDDEN_MATCHES=$(echo "$STAGED" | grep -E "$FORBIDDEN" || true)
+if [ -n "$FORBIDDEN_MATCHES" ]; then
+    echo "  BLOCKED: Forbidden file staged (.env, prompt.md, etc.):"
+    echo "$FORBIDDEN_MATCHES" | sed 's/^/    → /'
+    echo "  Remove with: git reset -- <file>"
+    VIOLATIONS=$((VIOLATIONS + 1))
+fi
+
+# ---- CHECK 2: Subscription field in JSON ----
+JSON_FILES=$(echo "$STAGED" | grep -E '\.json$' || true)
+for f in $JSON_FILES; do
+    CONTENT=$(git show ":$f" 2>/dev/null || true)
+    if [ -z "$CONTENT" ]; then continue; fi
+    if echo "$CONTENT" | grep -qE "$SUBSCRIPTION"; then
+        echo "  BLOCKED: subscription field in $f"
+        VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+done
+
+# ---- CHECK 3: Secrets (API keys, tokens) ----
+for f in $STAGED; do
+    # Skip binary files
+    if echo "$f" | grep -qE '\.(png|jpg|jpeg|gif|bmp|ico|svg|ttf|woff|woff2)$'; then continue; fi
+    CONTENT=$(git show ":$f" 2>/dev/null || true)
+    if [ -z "$CONTENT" ]; then continue; fi
+    if echo "$CONTENT" | grep -qE "$SECRETS"; then
+        echo "  BLOCKED: Secret/token pattern in $f"
+        VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+done
+
+# ---- CHECK 4: Absolute paths in text files ----
+TEXT_FILES=$(echo "$STAGED" | grep -E '\.(ts|tsx|rs|json|md|yaml|yml|toml|html|css|sh|ps1|conf)$' || true)
+for f in $TEXT_FILES; do
+    CONTENT=$(git show ":$f" 2>/dev/null || true)
+    if [ -z "$CONTENT" ]; then continue; fi
+
+    if echo "$CONTENT" | grep -qE "$WIN_PATH"; then
+        echo "  BLOCKED: Windows absolute path in $f"
+        VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+    if echo "$CONTENT" | grep -qE "$UNIX_PATH"; then
+        echo "  BLOCKED: Unix absolute path in $f"
+        VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+done
+
+# ---- CHECK 5: Hardcoded localhost endpoints ----
+LOCALHOST_FILES=$(echo "$STAGED" | grep -E '\.(ts|tsx|rs|json|conf)$' || true)
+for f in $LOCALHOST_FILES; do
+    CONTENT=$(git show ":$f" 2>/dev/null || true)
+    if [ -z "$CONTENT" ]; then continue; fi
+    if [ "$f" = "src-tauri/tauri.conf.json" ]; then
+        FILTERED_CONTENT=$(echo "$CONTENT" | grep -v 'http://localhost:1420' || true)
+    else
+        FILTERED_CONTENT="$CONTENT"
+    fi
+    if echo "$FILTERED_CONTENT" | grep -qE 'http://(127\.0\.0\.1|localhost):[0-9]+'; then
+        echo "  BLOCKED: Hardcoded localhost endpoint in $f"
+        echo "    Use import.meta.env.VITE_* or environment variable instead"
+        VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+done
+
+# ---- CHECK 6: __pycache__ / node_modules accidentally staged ----
+PYCACHE=$(echo "$STAGED" | grep -E '__pycache__|\.pyc$|node_modules/' || true)
+if [ -n "$PYCACHE" ]; then
+    echo "  BLOCKED: Compiled/dependency files staged:"
+    echo "$PYCACHE" | sed 's/^/    → /'
+    VIOLATIONS=$((VIOLATIONS + 1))
+fi
+
+# ---- Result ----
+if [ $VIOLATIONS -gt 0 ]; then
+    echo ""
+    echo "  COMMIT BLOCKED — $VIOLATIONS violation(s) found"
+    echo "  Bypass (emergency only): git commit --no-verify"
+    exit 1
+fi
+
+echo "  Pre-commit scan passed"
+exit 0
