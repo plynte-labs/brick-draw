@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/plynte-labs/brick-draw)](https://github.com/plynte-labs/brick-draw/stargazers)
-[![Build](https://img.shields.io/badge/build-manual-lightgrey)]()
+[![CI](https://github.com/plynte-labs/brick-draw/actions/workflows/ci.yml/badge.svg)](https://github.com/plynte-labs/brick-draw/actions/workflows/ci.yml)
 
 > **Contributor Notice**: Internal code identifiers (Rust commands, TypeScript function/variable names, code comments) are currently in Spanish. An English codebase translation is tracked as a future change (`i18n-codebase-english`).
 

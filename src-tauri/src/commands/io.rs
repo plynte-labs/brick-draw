@@ -626,6 +626,56 @@ mod tests {
     use crate::commands::layers::{anadir_capa, cambiar_opacidad_capa};
     use crate::commands::draw::{procesar_trazo, PuntoTrazo};
 
+    fn preparar_directorio_prueba(base: std::path::PathBuf) -> Result<std::path::PathBuf, String> {
+        if es_ruta_sistema_insegura(&base) {
+            return Err(format!("Ruta de prueba bloqueada por seguridad: {}", base.display()));
+        }
+
+        std::fs::create_dir_all(&base)
+            .map_err(|e| format!("No se pudo crear el directorio de prueba '{}': {}", base.display(), e))?;
+
+        let canonical = base
+            .canonicalize()
+            .map_err(|e| format!("No se pudo canonicalizar el directorio de prueba '{}': {}", base.display(), e))?;
+
+        if es_ruta_sistema_insegura(&canonical) {
+            return Err(format!("Ruta de prueba canonicalizada bloqueada por seguridad: {}", canonical.display()));
+        }
+
+        Ok(canonical)
+    }
+
+    fn ruta_proyecto_prueba(file_name: &str) -> std::path::PathBuf {
+        if let Some(base) = std::env::var_os("BRICK_DRAW_TEST_OUTPUT_DIR") {
+            if let Ok(base) = preparar_directorio_prueba(std::path::PathBuf::from(base)) {
+                return base.join(file_name);
+            }
+        }
+
+        let candidate = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join("test-output");
+
+        if let Ok(base) = preparar_directorio_prueba(candidate) {
+            return base.join(file_name);
+        }
+
+        #[cfg(windows)]
+        let fallback_base = std::env::var_os("USERPROFILE")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap())
+            .join("Documents")
+            .join("brick-draw-test");
+
+        #[cfg(not(windows))]
+        let fallback_base = std::env::temp_dir().join("brick-draw-test");
+
+        preparar_directorio_prueba(fallback_base)
+            .expect("No se pudo preparar una ruta segura para el test")
+            .join(file_name)
+    }
+
     fn mock_state<'a, T: Send + Sync + 'static>(val: &'a T) -> State<'a, T> {
         unsafe { std::mem::transmute(val) }
     }
@@ -710,9 +760,9 @@ mod tests {
         };
         drop(state_read);
 
-        // Crear una ruta absoluta segura de prueba en el directorio local
-        let temp_dir = std::env::current_dir().unwrap();
-        let project_path = temp_dir.join("test_project_layers.brick");
+        // Crear una ruta absoluta segura de prueba sin debilitar la política productiva.
+        let project_path = ruta_proyecto_prueba("test_project_layers.brick");
+        let project_dir = project_path.parent().map(|path| path.to_path_buf());
         let project_path_str = project_path.to_string_lossy().to_string();
 
         // 4. Guardar proyecto
@@ -773,7 +823,10 @@ mod tests {
         assert_eq!(straight_b_bytes.len(), expected_size_b);
 
         // 6. Limpiar archivo físico temporal
-        std::fs::remove_file(project_path).unwrap();
+        std::fs::remove_file(&project_path).unwrap();
+        if let Some(project_dir) = project_dir {
+            let _ = std::fs::remove_dir(project_dir);
+        }
         println!("✅ Test de integración de Guardado y Carga de proyectos .brick superado con éxito.");
     }
 }
