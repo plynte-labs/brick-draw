@@ -35,7 +35,18 @@ $textPattern = '\.(ts|tsx|rs|json|md|yaml|yml|toml|html|css|sh|ps1|conf)$'
 function Normalize-RepoPath {
     param([string]$PathValue)
 
-    return $PathValue.Replace($repoRoot + '\', '').Replace('\', '/')
+    $fullPath = [System.IO.Path]::GetFullPath($PathValue)
+    $rootPath = [System.IO.Path]::GetFullPath($repoRoot)
+
+    if ($fullPath.StartsWith($rootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $relativePath = $fullPath.Substring($rootPath.Length).TrimStart(
+            [System.IO.Path]::DirectorySeparatorChar,
+            [System.IO.Path]::AltDirectorySeparatorChar
+        )
+        return $relativePath.Replace('\', '/')
+    }
+
+    return $PathValue.Replace('\', '/')
 }
 
 function Should-SkipPath {
