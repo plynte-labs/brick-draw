@@ -2,6 +2,7 @@
 import { useRef, useEffect } from "react";
 import { useAppStore } from "../store/useStore";
 import { useDrawingEngine } from "../hooks/useDrawingEngine";
+import { TransformGizmo } from "./TransformGizmo";
 
 export const DrawingCanvas = () => {
     const { settings, camera, setCamera } = useAppStore();
@@ -9,7 +10,10 @@ export const DrawingCanvas = () => {
     const cursorDivRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
-    const { startDrawing, processPointerMove } = useDrawingEngine(canvasRef);
+    const { startDrawing, processPointerMove, selectionMaskRef, hasSelectionRef } =
+        useDrawingEngine(canvasRef);
+
+    const isTransform = settings.tool === "transform";
 
     // 🚀 ZOOM MATEMÁTICO (Dirigido hacia el ratón)
     useEffect(() => {
@@ -161,14 +165,27 @@ export const DrawingCanvas = () => {
                     if (cursorDivRef.current) cursorDivRef.current.style.transform = 'translate(-9999px, -9999px)';
                 }}
             />
-            <div
-                ref={cursorDivRef}
-                className="pointer-events-none absolute top-0 left-0 rounded-full border border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)] z-[100] will-change-transform"
-                style={{
-                    backgroundColor: settings.tool === 'eraser' ? 'rgba(255,255,255,0.4)' : `${settings.color}33`,
-                    transform: 'translate(-9999px, -9999px)'
-                }}
-            />
+            {/* The brush ring cursor is irrelevant in transform mode; hide it so it
+                does not float over the gizmo handles. */}
+            {!isTransform && (
+                <div
+                    ref={cursorDivRef}
+                    className="pointer-events-none absolute top-0 left-0 rounded-full border border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)] z-[100] will-change-transform"
+                    style={{
+                        backgroundColor: settings.tool === 'eraser' ? 'rgba(255,255,255,0.4)' : `${settings.color}33`,
+                        transform: 'translate(-9999px, -9999px)'
+                    }}
+                />
+            )}
+            {/* Transform gizmo overlay: mounts only while the transform tool is
+                active. On unmount it cancels (touches nothing in the store/layer). */}
+            {isTransform && (
+                <TransformGizmo
+                    canvasRef={canvasRef}
+                    selectionMaskRef={selectionMaskRef}
+                    hasSelectionRef={hasSelectionRef}
+                />
+            )}
         </div>
     );
 };

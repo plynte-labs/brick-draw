@@ -2,7 +2,7 @@
 import { StateCreator } from "zustand";
 import { PressureCurvePreset } from "../hooks/engine/pressureCurve";
 
-export type DrawingTool = "brush" | "eraser" | "wand" | "move";
+export type DrawingTool = "brush" | "eraser" | "wand" | "move" | "transform";
 
 export interface Layer {
   id: string;

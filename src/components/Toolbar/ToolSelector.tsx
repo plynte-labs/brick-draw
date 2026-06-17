@@ -1,6 +1,6 @@
 // src/components/Toolbar/ToolSelector.tsx
 import React from 'react';
-import { FaBrush, FaEraser, FaMagic, FaArrowsAlt, FaTimesCircle } from 'react-icons/fa';
+import { FaBrush, FaEraser, FaMagic, FaArrowsAlt, FaTimesCircle, FaExpand } from 'react-icons/fa';
 import { useAppStore } from '../../store/useStore';
 import { DrawingTool } from '../../store/types';
 
@@ -9,6 +9,7 @@ const tools: { id: DrawingTool; name: string; icon: any }[] = [
     { id: 'eraser', name: 'Eraser', icon: FaEraser },
     { id: 'wand', name: 'Wand', icon: FaMagic },
     { id: 'move', name: 'Move', icon: FaArrowsAlt },
+    { id: 'transform', name: 'Transform', icon: FaExpand },
 ];
 
 export const ToolSelector: React.FC = () => {

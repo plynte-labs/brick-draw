@@ -179,5 +179,14 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
     }
   };
 
-  return { startDrawing, processPointerMove };
-};;
+  return {
+    startDrawing,
+    processPointerMove,
+    // Exposed for the TransformGizmo overlay, which needs the live selection
+    // mask + flag to decide between a selection-bbox transform and a whole-layer
+    // transform. These are the SAME refs the stroke engine uses, so the gizmo
+    // sees the current selection state without any extra wiring.
+    selectionMaskRef,
+    hasSelectionRef,
+  };
+};
