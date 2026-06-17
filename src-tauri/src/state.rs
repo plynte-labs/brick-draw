@@ -1,15 +1,7 @@
 // src-tauri/src/state.rs
 use std::sync::Arc;
 use parking_lot::RwLock;
-use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 use tiny_skia::Pixmap;
-
-pub struct GpuContext {
-    pub device: Device,
-    pub queue: Queue,
-    pub config: SurfaceConfiguration,
-    pub surface: Surface<'static>,
-}
 
 pub struct NativeLayer {
     pub id: String,
@@ -18,7 +10,6 @@ pub struct NativeLayer {
     pub x: f32,
     pub y: f32,
     pub buffer: Arc<RwLock<Pixmap>>,
-    pub texture: Option<wgpu::Texture>,
 }
 
 /// Diff-based history entry — stores only the changed region instead of full Pixmap clone.
@@ -54,7 +45,6 @@ impl Default for HistoryState {
 }
 
 pub struct AppState {
-    pub gpu: Option<GpuContext>,
     pub layers: Vec<NativeLayer>,
     pub active_layer_id: String,
     pub history: HistoryState,
@@ -70,7 +60,6 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
-            gpu: None,
             layers: Vec::new(),
             active_layer_id: String::new(),
             history: HistoryState::default(),

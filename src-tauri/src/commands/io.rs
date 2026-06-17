@@ -693,7 +693,6 @@ pub fn cargar_proyecto_brick(
             x: layer_meta.x,
             y: layer_meta.y,
             buffer: Arc::new(RwLock::new(pixmap)),
-            texture: None,
         };
         new_layers.push(native_layer);
 

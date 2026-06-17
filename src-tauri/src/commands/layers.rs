@@ -30,7 +30,6 @@ pub fn anadir_capa(
         x: 0.0,
         y: 0.0, 
         buffer: Arc::new(RwLock::new(pixmap)),
-        texture: None,
     };
     
     state_lock.layers.push(nueva_capa);
