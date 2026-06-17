@@ -1,5 +1,6 @@
 // src/store/types.ts
 import { StateCreator } from "zustand";
+import { PressureCurvePreset } from "../hooks/engine/pressureCurve";
 
 export type DrawingTool = "brush" | "eraser" | "wand" | "move";
 
@@ -20,6 +21,9 @@ export interface BrushSettings {
   size: number; 
   opacity: number;
   smoothing: number;
+  // Curva de respuesta de presión del lápiz: cómo la fuerza real del stylus
+  // (tras resolvePressure) se traduce en grosor. "linear" = identidad.
+  pressureCurve: PressureCurvePreset;
 }
 
 export interface Keybinds {

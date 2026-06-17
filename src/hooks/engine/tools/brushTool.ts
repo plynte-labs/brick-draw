@@ -1,5 +1,6 @@
 import { DrawingToolStrategy } from "./types";
 import { resolvePressure } from "../pressure";
+import { mapPressure } from "../pressureCurve";
 
 export const brushTool: DrawingToolStrategy = {
   onPointerDown: ({ state, coords, pressure, pointerType, refs, actions }) => {
@@ -10,7 +11,12 @@ export const brushTool: DrawingToolStrategy = {
     refs.isDrawing.current = true;
 
     // Soporte de tableta: lápiz → presión real; mouse → ancho completo.
-    const p = resolvePressure(pointerType, pressure);
+    // Después de resolver, la curva de presión moldea cómo la fuerza se vuelve grosor
+    // (Lineal = identidad; Suave/Dura cambian la respuesta).
+    const p = mapPressure(
+      resolvePressure(pointerType, pressure),
+      state.settings.pressureCurve,
+    );
 
     // 🚀 FIX: El truco del punto fantasma.
     // Añadimos una coordenada idéntica desplazada 0.01px para engañar a Rust
@@ -74,7 +80,11 @@ export const brushTool: DrawingToolStrategy = {
       if (!coords) continue;
 
       // Soporte de tableta: lápiz → presión real por evento; mouse → ancho completo.
-      const pressure = resolvePressure(event.pointerType, event.pressure);
+      // La curva de presión se aplica tras resolver, igual que en onPointerDown.
+      const pressure = mapPressure(
+        resolvePressure(event.pointerType, event.pressure),
+        state.settings.pressureCurve,
+      );
 
       if (state.settings.smoothing === 0) {
         refs.currentPoint.current = coords;

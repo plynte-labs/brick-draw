@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { moverCapa, procesarTrazo } from "../../services/tauriService";
 import { useAppStore } from "../../store/useStore";
+import { mapPressure } from "./pressureCurve";
 
 interface DryerProps {
   wetLayerRef: React.RefObject<OffscreenCanvas | null>;
@@ -47,6 +48,9 @@ export const useStrokeDryer = ({
         strokePointsRef.current.length > 0
       ) {
         const raw = lastRawPoint.current;
+        // El punto de flush trae presión RESUELTA pero sin curva. La moldeamos acá
+        // con la misma curva que el resto del trazo para que el grosor sea coherente.
+        const curvedP = mapPressure(raw.p, state.settings.pressureCurve);
         const last = strokePointsRef.current[strokePointsRef.current.length - 1];
         if (Math.abs(raw.x - last.x) > 0.5 || Math.abs(raw.y - last.y) > 0.5) {
           const wetCtx = wetLayerRef.current?.getContext("2d");
@@ -57,13 +61,13 @@ export const useStrokeDryer = ({
               state.settings.tool === "eraser"
                 ? "rgba(255, 255, 255, 1)"
                 : state.settings.color;
-            wetCtx.lineWidth = state.settings.size * (raw.p || 0.5) * 2;
+            wetCtx.lineWidth = state.settings.size * (curvedP || 0.5) * 2;
             wetCtx.beginPath();
             wetCtx.moveTo(last.x, last.y);
             wetCtx.lineTo(raw.x, raw.y);
             wetCtx.stroke();
           }
-          strokePointsRef.current.push({ x: raw.x, y: raw.y, p: raw.p });
+          strokePointsRef.current.push({ x: raw.x, y: raw.y, p: curvedP });
         }
       }
 

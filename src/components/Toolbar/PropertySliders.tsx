@@ -1,7 +1,14 @@
 // src/components/Toolbar/PropertySliders.tsx
 import React from 'react';
-import { MdOpacity, MdTimeline } from 'react-icons/md';
+import { MdOpacity, MdTimeline, MdGesture } from 'react-icons/md';
 import { useAppStore } from '../../store/useStore';
+import { PressureCurvePreset } from '../../hooks/engine/pressureCurve';
+
+const PRESSURE_CURVE_OPTIONS: { value: PressureCurvePreset; label: string }[] = [
+    { value: 'linear', label: 'Lineal' },
+    { value: 'soft', label: 'Suave' },
+    { value: 'hard', label: 'Dura' },
+];
 
 export const PropertySliders: React.FC = () => {
     const { settings, setSettings } = useAppStore();
@@ -62,6 +69,29 @@ export const PropertySliders: React.FC = () => {
                     onChange={(e) => updateSetting({ smoothing: parseFloat(e.target.value) })}
                     className="w-full cursor-grab h-1.5 bg-neutral-700 rounded-full appearance-none accent-sky-500"
                 />
+            </div>
+
+            {/* Curva de presión */}
+            <div>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase mb-2 flex items-center gap-1">
+                    <MdGesture /> Curva de presión
+                </label>
+                <div className="flex gap-1 bg-neutral-900 p-1 rounded-lg border border-neutral-700">
+                    {PRESSURE_CURVE_OPTIONS.map((opt) => (
+                        <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => updateSetting({ pressureCurve: opt.value })}
+                            className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${
+                                settings.pressureCurve === opt.value
+                                    ? 'bg-sky-500 text-white font-bold'
+                                    : 'text-neutral-400 hover:bg-neutral-800'
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
             </div>
         </section>
     );
