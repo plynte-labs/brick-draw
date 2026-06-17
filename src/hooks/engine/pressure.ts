@@ -9,9 +9,10 @@ export const resolvePressure = (
   pointerType: string | undefined,
   raw: number,
 ): number => {
-  if (pointerType === "pen") {
-    const p = raw > 0 ? raw : 0.5;
-    return Math.min(1, Math.max(0.05, p));
-  }
-  return 1.0;
+  // Solo el MOUSE explícito va a ancho completo (reporta pressure=0.5 al click, no es presión real).
+  // Lápiz / touch / desconocido usan la presión REAL: algunos drivers de tableta reportan pointerType
+  // distinto de "pen" (modo mouse), y gatear estricto en "pen" mataba la presión que sí existía.
+  if (pointerType === "mouse") return 1.0;
+  const p = raw > 0 ? raw : 0.5;
+  return Math.min(1, Math.max(0.05, p));
 };

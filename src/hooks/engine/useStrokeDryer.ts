@@ -55,7 +55,7 @@ export const useStrokeDryer = ({
             wetCtx.lineJoin = "round";
             wetCtx.strokeStyle =
               state.settings.tool === "eraser"
-                ? "rgba(255, 255, 255, 0.4)"
+                ? "rgba(255, 255, 255, 1)"
                 : state.settings.color;
             wetCtx.lineWidth = state.settings.size * (raw.p || 0.5) * 2;
             wetCtx.beginPath();

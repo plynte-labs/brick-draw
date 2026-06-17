@@ -32,7 +32,7 @@ export const brushTool: DrawingToolStrategy = {
         // así ves dónde vas a borrar antes de soltar el clic.
         wetCtx.strokeStyle =
           state.settings.tool === "eraser"
-            ? "rgba(255, 255, 255, 0.4)"
+            ? "rgba(255, 255, 255, 1)"
             : state.settings.color;
 
         wetCtx.lineWidth = state.settings.size * p * 2;
@@ -61,7 +61,7 @@ export const brushTool: DrawingToolStrategy = {
 
     wetCtx.strokeStyle =
       state.settings.tool === "eraser"
-        ? "rgba(255, 255, 255, 0.4)"
+        ? "rgba(255, 255, 255, 1)"
         : state.settings.color;
 
     wetCtx.lineCap = "round";
