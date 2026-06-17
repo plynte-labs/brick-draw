@@ -599,7 +599,7 @@ pub fn cargar_proyecto_brick(
 
     // ── Leer canvas.json ──
     let metadata: CanvasMetadataDto = {
-        let mut canvas_file = archive.by_name("canvas.json")
+        let canvas_file = archive.by_name("canvas.json")
             .map_err(|e| format!("Manifiesto canvas.json no encontrado en el archivo de proyecto: {}", e))?;
         
         // Seguridad: acotar la lectura del manifiesto inflado (antes era ilimitada → bomba en el JSON).
@@ -632,7 +632,7 @@ pub fn cargar_proyecto_brick(
     // ── Reconstruir cada capa desde los bytes crudos .raw ──
     for layer_meta in &metadata.layers {
         let file_name = format!("layer_{}.raw", layer_meta.id);
-        let mut layer_file = archive.by_name(&file_name)
+        let layer_file = archive.by_name(&file_name)
             .map_err(|e| format!("Datos gráficos de capa '{}' no encontrados en el proyecto: {}", file_name, e))?;
 
         // Seguridad: rechazar dimensiones absurdas ANTES de reservar memoria (evita overflow/OOM).
