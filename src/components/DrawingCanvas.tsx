@@ -101,11 +101,6 @@ export const DrawingCanvas = () => {
             return;
         }
 
-        // DIAGNÓSTICO (solo dev): qué reporta el dispositivo. Si con el lápiz pointerType no es "pen"
-        // o pressure no varía al apretar más/menos, el problema es el driver/Windows Ink, no el código.
-        if (import.meta.env.DEV) {
-            console.log("[tablet] pointerType:", e.pointerType, "pressure:", e.pressure);
-        }
         // Soporte de tableta: pasamos el tipo de puntero ('pen'/'mouse'/'touch') para resolver
         // la presión (lápiz = presión real → grosor variable; mouse = ancho completo).
         startDrawing(e.clientX, e.clientY, e.pressure || 0.5, e.pointerType);
