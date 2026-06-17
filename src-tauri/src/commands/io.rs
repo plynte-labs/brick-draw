@@ -17,6 +17,53 @@ const MAX_PNG_SIZE_BYTES: usize = 50 * 1024 * 1024;
 /// Minimum interval between saves (500 ms) — prevents rapid-fire disk writes
 const MIN_SAVE_INTERVAL_MS: u128 = 500;
 
+// ── Seguridad al cargar .brick: límites contra bombas de descompresión / OOM ──
+/// Dimensión máxima por capa (px). Rechaza metadatos con tamaños absurdos antes de reservar memoria.
+const MAX_DIMENSION: u32 = 16384;
+/// Tope total de bytes crudos de todas las capas (256 MB). Frena una bomba de muchas capas/grandes.
+const MAX_TOTAL_RAW_BYTES: usize = 256 * 1024 * 1024;
+/// Tope del manifiesto canvas.json inflado (4 MB). La entrada JSON antes no tenía cota.
+const MAX_CANVAS_JSON_BYTES: u64 = 4 * 1024 * 1024;
+
+/// Ruta temporal hermana (mismo volumen) para escritura atómica: nombre único por proceso+nanos
+/// para evitar colisión entre guardados concurrentes.
+fn temp_sibling(target: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    let parent = target
+        .parent()
+        .ok_or("Seguridad: ruta sin directorio padre válido.")?;
+    let base = target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("brickdraw");
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    Ok(parent.join(format!(".{}.{}.{}.tmp", base, std::process::id(), nanos)))
+}
+
+/// Escritura ATÓMICA de bytes: escribe a un temporal hermano, hace sync_all y luego rename sobre el
+/// destino (rename es atómico en el mismo volumen). Si algo falla, el archivo previo queda INTACTO
+/// y el temporal se borra. Evita corromper un proyecto/exportación al fallar/crashear a mitad.
+fn atomic_write(target: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    let tmp = temp_sibling(target)?;
+    let res = (|| -> std::io::Result<()> {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        Ok(())
+    })();
+    if let Err(e) = res {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("Error al escribir archivo temporal: {}", e));
+    }
+    if let Err(e) = std::fs::rename(&tmp, target) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("Error al confirmar el guardado atómico (rename): {}", e));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn guardar_dibujo(
     _app: AppHandle,
@@ -134,9 +181,9 @@ pub fn guardar_dibujo(
         ));
     }
 
-    // ── Escritura segura usando la ruta canonicalizada (NO la ruta original del usuario) ──
-    std::fs::write(&canonical, &png_data)
-        .map_err(|e| format!("Error crítico al escribir en disco: {}", e))?;
+    // ── Escritura ATÓMICA usando la ruta canonicalizada (temp + sync + rename) ──
+    // Si falla a mitad, el PNG previo en disco queda intacto (no se corrompe).
+    atomic_write(&canonical, &png_data)?;
 
     // ── Actualizar métricas de rate limiting ──
     drop(state_lock);
@@ -439,11 +486,6 @@ pub fn guardar_proyecto_brick(
         }
     }
 
-    // ── Crear archivo y ZipWriter ──
-    let file = std::fs::File::create(&canonical)
-        .map_err(|e| format!("Error al crear el archivo de proyecto: {}", e))?;
-    let mut zip = zip::ZipWriter::new(file);
-
     // ── Opciones de compresión Deflate al máximo para los bytes crudos ──
     let options = zip::write::FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
@@ -455,7 +497,7 @@ pub fn guardar_proyecto_brick(
     metadata.canvas_width = state_lock.canvas_width;
     metadata.canvas_height = state_lock.canvas_height;
     metadata.active_layer_id = state_lock.active_layer_id.clone();
-    
+
     for layer_meta in &mut metadata.layers {
         if let Some(layer) = state_lock.layers.iter().find(|l| l.id == layer_meta.id) {
             let buffer_lock = layer.buffer.read();
@@ -468,31 +510,55 @@ pub fn guardar_proyecto_brick(
         }
     }
 
-    // ── Escribir manifiesto canvas.json ──
-    zip.start_file("canvas.json", options)
-        .map_err(|e| format!("Error al iniciar archivo canvas.json en el contenedor: {}", e))?;
-    let json_data = serde_json::to_string_pretty(&metadata)
-        .map_err(|e| format!("Error al serializar metadatos del proyecto: {}", e))?;
-    
-    zip.write_all(json_data.as_bytes())
-        .map_err(|e| format!("Error al escribir metadatos en canvas.json: {}", e))?;
+    // ── Guardado ATÓMICO: escribimos el ZIP a un temporal hermano (mismo volumen), hacemos
+    //    sync_all y luego rename sobre el destino. Si algo falla a mitad (disco lleno, capa
+    //    faltante, crash), el .brick PREVIO queda intacto y el temporal se borra. Antes se
+    //    creaba el archivo destino directamente y un fallo lo dejaba corrupto/truncado. ──
+    let tmp_path = temp_sibling(&canonical)?;
+    let write_result = (|| -> Result<(), String> {
+        let file = std::fs::File::create(&tmp_path)
+            .map_err(|e| format!("Error al crear el archivo temporal de proyecto: {}", e))?;
+        let mut zip = zip::ZipWriter::new(file);
 
-    // ── Escribir capas nativas como bytes puros .raw ──
-    for layer_meta in &metadata.layers {
-        if let Some(layer) = state_lock.layers.iter().find(|l| l.id == layer_meta.id) {
-            let buffer_lock = layer.buffer.read();
-            let file_name = format!("layer_{}.raw", layer.id);
-            zip.start_file(&file_name, options)
-                .map_err(|e| format!("Error al iniciar archivo de capa '{}' en el contenedor: {}", layer.id, e))?;
-            zip.write_all(buffer_lock.data())
-                .map_err(|e| format!("Error al escribir bytes crudos de la capa '{}': {}", layer.id, e))?;
-        } else {
-            return Err(format!("Error: Capa '{}' no encontrada en el motor gráfico de Rust.", layer_meta.id));
+        // ── Escribir manifiesto canvas.json ──
+        zip.start_file("canvas.json", options)
+            .map_err(|e| format!("Error al iniciar archivo canvas.json en el contenedor: {}", e))?;
+        let json_data = serde_json::to_string_pretty(&metadata)
+            .map_err(|e| format!("Error al serializar metadatos del proyecto: {}", e))?;
+        zip.write_all(json_data.as_bytes())
+            .map_err(|e| format!("Error al escribir metadatos en canvas.json: {}", e))?;
+
+        // ── Escribir capas nativas como bytes puros .raw ──
+        for layer_meta in &metadata.layers {
+            if let Some(layer) = state_lock.layers.iter().find(|l| l.id == layer_meta.id) {
+                let buffer_lock = layer.buffer.read();
+                let file_name = format!("layer_{}.raw", layer.id);
+                zip.start_file(&file_name, options)
+                    .map_err(|e| format!("Error al iniciar archivo de capa '{}' en el contenedor: {}", layer.id, e))?;
+                zip.write_all(buffer_lock.data())
+                    .map_err(|e| format!("Error al escribir bytes crudos de la capa '{}': {}", layer.id, e))?;
+            } else {
+                return Err(format!("Error: Capa '{}' no encontrada en el motor gráfico de Rust.", layer_meta.id));
+            }
         }
-    }
 
-    zip.finish()
-        .map_err(|e| format!("Error al finalizar y empaquetar el archivo .brick: {}", e))?;
+        let finished = zip
+            .finish()
+            .map_err(|e| format!("Error al finalizar y empaquetar el archivo .brick: {}", e))?;
+        finished
+            .sync_all()
+            .map_err(|e| format!("Error al sincronizar el .brick a disco: {}", e))?;
+        Ok(())
+    })();
+
+    if let Err(e) = write_result {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+    if let Err(e) = std::fs::rename(&tmp_path, &canonical) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(format!("Error al confirmar el guardado atómico (rename): {}", e));
+    }
 
     drop(state_lock);
     {
@@ -536,27 +602,32 @@ pub fn cargar_proyecto_brick(
         let mut canvas_file = archive.by_name("canvas.json")
             .map_err(|e| format!("Manifiesto canvas.json no encontrado en el archivo de proyecto: {}", e))?;
         
+        // Seguridad: acotar la lectura del manifiesto inflado (antes era ilimitada → bomba en el JSON).
         let mut json_content = String::new();
-        canvas_file.read_to_string(&mut json_content)
+        let bytes_read = canvas_file
+            .take(MAX_CANVAS_JSON_BYTES)
+            .read_to_string(&mut json_content)
             .map_err(|e| format!("Error al leer contenido de canvas.json: {}", e))?;
+        if bytes_read as u64 >= MAX_CANVAS_JSON_BYTES {
+            return Err(
+                "Seguridad: canvas.json excede el límite permitido (posible archivo malicioso)."
+                    .to_string(),
+            );
+        }
         serde_json::from_str(&json_content)
             .map_err(|e| format!("Error al deserializar manifiesto de capas: {}", e))?
     };
 
 
-    // ── Reconstruir AppState en Rust y Resetear Historial ──
-    let mut state_lock = state.write();
-    
-    // Reseteo atómico de historial nativo
-    state_lock.history.undo_stack.clear();
-    state_lock.history.redo_stack.clear();
-    
-    state_lock.canvas_width = metadata.canvas_width;
-    state_lock.canvas_height = metadata.canvas_height;
-    state_lock.active_layer_id = metadata.active_layer_id.clone();
-    state_lock.layers.clear();
-
+    // ── Decodificar TODAS las capas en LOCALES, SIN tomar el lock (validate-before-mutate) ──
+    // Una carga rechazada/corrupta (bomba, dimensiones absurdas) NUNCA debe borrar el proyecto
+    // actual: antes master tomaba el write lock y hacía layers.clear() ANTES de leer las capas, así
+    // que un .brick malicioso dejaba el lienzo vacío aunque la carga fallara. Ahora construimos
+    // new_layers en local y solo al terminar OK hacemos un swap atómico.
+    let mut new_layers: Vec<crate::state::NativeLayer> = Vec::with_capacity(metadata.layers.len());
     let mut raw_buffers = HashMap::new();
+    // Acumulador para el tope total anti-bomba de descompresión.
+    let mut total_raw: usize = 0;
 
     // ── Reconstruir cada capa desde los bytes crudos .raw ──
     for layer_meta in &metadata.layers {
@@ -564,25 +635,47 @@ pub fn cargar_proyecto_brick(
         let mut layer_file = archive.by_name(&file_name)
             .map_err(|e| format!("Datos gráficos de capa '{}' no encontrados en el proyecto: {}", file_name, e))?;
 
-        // Reservar memoria y hacer lectura resiliente de bytes
+        // Seguridad: rechazar dimensiones absurdas ANTES de reservar memoria (evita overflow/OOM).
+        if layer_meta.width > MAX_DIMENSION || layer_meta.height > MAX_DIMENSION {
+            return Err(format!(
+                "Seguridad: dimensiones de la capa '{}' fuera de límite ({}x{}, máx {}).",
+                layer_meta.id, layer_meta.width, layer_meta.height, MAX_DIMENSION
+            ));
+        }
         let w = if layer_meta.width == 0 { 1 } else { layer_meta.width };
         let h = if layer_meta.height == 0 { 1 } else { layer_meta.height };
-        let expected_size = (w * h * 4) as usize;
-        
+        // Tamaño esperado con multiplicación CHEQUEADA (sin wrap de enteros que daría un buffer chico).
+        let expected_size = (w as usize)
+            .checked_mul(h as usize)
+            .and_then(|n| n.checked_mul(4))
+            .ok_or_else(|| format!("Seguridad: el tamaño de la capa '{}' desborda.", layer_meta.id))?;
+
+        // Tope total acumulado: frena una bomba compuesta por muchas capas grandes.
+        total_raw = total_raw.saturating_add(expected_size);
+        if total_raw > MAX_TOTAL_RAW_BYTES {
+            return Err(
+                "Seguridad: el proyecto excede el límite total de píxeles (posible bomba de descompresión)."
+                    .to_string(),
+            );
+        }
+
+        // Lectura ACOTADA: leemos como mucho expected_size+1 bytes inflados. Si la entrada infla MÁS
+        // de lo declarado en los metadatos, es una bomba → rechazar. Si infla menos, se rellena
+        // (misma resiliencia que antes). Antes era un read_to_end ilimitado → riesgo de OOM.
         let mut raw_bytes = Vec::new();
-        layer_file.read_to_end(&mut raw_bytes)
+        layer_file
+            .take(expected_size as u64 + 1)
+            .read_to_end(&mut raw_bytes)
             .map_err(|e| format!("Error leyendo bytes gráficos de la capa '{}': {}", layer_meta.id, e))?;
 
-        if raw_bytes.len() != expected_size {
-            println!(
-                "Resiliencia: Mismatch de tamaño para la capa '{}'. Esperado: {} bytes, Leído: {} bytes. Ajustando...",
-                layer_meta.id, expected_size, raw_bytes.len()
-            );
-            if raw_bytes.len() < expected_size {
-                raw_bytes.resize(expected_size, 0);
-            } else {
-                raw_bytes.truncate(expected_size);
-            }
+        if raw_bytes.len() > expected_size {
+            return Err(format!(
+                "Seguridad: la capa '{}' infla más de lo declarado (posible bomba de descompresión).",
+                layer_meta.id
+            ));
+        }
+        if raw_bytes.len() < expected_size {
+            raw_bytes.resize(expected_size, 0);
         }
 
         // Recrear Pixmap nativo
@@ -602,11 +695,24 @@ pub fn cargar_proyecto_brick(
             buffer: Arc::new(RwLock::new(pixmap)),
             texture: None,
         };
-        state_lock.layers.push(native_layer);
+        new_layers.push(native_layer);
 
         // Des-premultiplicación ultra veloz nativa con LUT y shifts de bits
         let straight_rgba = unpremultiply_pixels(&raw_bytes);
         raw_buffers.insert(layer_meta.id.clone(), straight_rgba);
+    }
+
+    // ── Cutover ATÓMICO: una sola escritura corta intercambia las capas y resetea el historial.
+    //    Como new_layers ya está totalmente decodificado y validado, una carga fallida jamás llega
+    //    hasta aquí → el proyecto previo del usuario queda intacto ante un error. ──
+    {
+        let mut state_lock = state.write();
+        state_lock.history.undo_stack.clear();
+        state_lock.history.redo_stack.clear();
+        state_lock.canvas_width = metadata.canvas_width;
+        state_lock.canvas_height = metadata.canvas_height;
+        state_lock.active_layer_id = metadata.active_layer_id.clone();
+        state_lock.layers = new_layers;
     }
 
     Ok(ProyectoBrickResponse {
@@ -828,6 +934,46 @@ mod tests {
             let _ = std::fs::remove_dir(project_dir);
         }
         println!("✅ Test de integración de Guardado y Carga de proyectos .brick superado con éxito.");
+    }
+
+    /// Seguridad: un .brick con dimensiones de capa absurdas (bomba de descompresión / OOM) debe
+    /// rechazarse, Y la carga rechazada NO debe borrar el proyecto que el usuario ya tenía abierto
+    /// (validate-before-mutate). Cubre el cap MAX_DIMENSION + el cutover atómico.
+    #[test]
+    fn cargar_rechaza_dimensiones_absurdas_sin_borrar_estado() {
+        use std::io::Write as _;
+
+        let state = Arc::new(RwLock::new(AppState::new()));
+        let guard = mock_state(&state);
+
+        // Proyecto previo del usuario: una capa real que NO se debe perder si la carga se rechaza.
+        anadir_capa(guard.clone(), "original".to_string(), 32, 32).unwrap();
+
+        // Construir un .brick malicioso: metadatos declaran una capa de 70000x70000 (> MAX_DIMENSION).
+        let dir = std::env::current_dir().unwrap();
+        let path = dir.join("test_bomba_dims.brick");
+        {
+            let f = std::fs::File::create(&path).unwrap();
+            let mut zipw = zip::ZipWriter::new(f);
+            let opts = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            let canvas_json = r#"{"canvas_width":64,"canvas_height":64,"active_layer_id":"mal","version":"1.0.0","layers":[{"id":"mal","name":"M","opacity":1.0,"visible":true,"locked":false,"x":0.0,"y":0.0,"width":70000,"height":70000}]}"#;
+            zipw.start_file("canvas.json", opts).unwrap();
+            zipw.write_all(canvas_json.as_bytes()).unwrap();
+            zipw.start_file("layer_mal.raw", opts).unwrap();
+            zipw.write_all(&[0u8; 16]).unwrap();
+            zipw.finish().unwrap();
+        }
+
+        let res = cargar_proyecto_brick(guard.clone(), path.to_string_lossy().to_string());
+        let _ = std::fs::remove_file(&path);
+
+        assert!(res.is_err(), "una capa de 70000x70000 debe ser rechazada (cap MAX_DIMENSION)");
+
+        // El proyecto previo NO debe haberse borrado por una carga rechazada.
+        let s = state.read();
+        assert_eq!(s.layers.len(), 1, "la carga rechazada no debe borrar el estado previo");
+        assert_eq!(s.layers[0].id, "original", "la capa previa del usuario debe seguir intacta");
     }
 }
 
