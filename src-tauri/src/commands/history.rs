@@ -73,6 +73,12 @@ fn capture_for_redo(
 
 #[tauri::command]
 pub fn deshacer(state: State<'_, Arc<RwLock<AppState>>>) -> Result<Option<String>, String> {
+    deshacer_core(state.inner())
+}
+
+// honest-concurrency-tests (CONC-5): plain core fns over `&Arc<RwLock<AppState>>` so tests drive
+// them with a real Arc (no transmute). The `#[tauri::command]` wrappers are just the IPC boundary.
+pub fn deshacer_core(state: &Arc<RwLock<AppState>>) -> Result<Option<String>, String> {
     // Write: modifies history stacks and layer buffer
     let mut state_lock = state.write();
     let app_state = &mut *state_lock;
@@ -116,6 +122,10 @@ pub fn deshacer(state: State<'_, Arc<RwLock<AppState>>>) -> Result<Option<String
 
 #[tauri::command]
 pub fn rehacer(state: State<'_, Arc<RwLock<AppState>>>) -> Result<Option<String>, String> {
+    rehacer_core(state.inner())
+}
+
+pub fn rehacer_core(state: &Arc<RwLock<AppState>>) -> Result<Option<String>, String> {
     // Write: modifies history stacks and layer buffer
     let mut state_lock = state.write();
     let app_state = &mut *state_lock;
@@ -159,6 +169,10 @@ pub fn rehacer(state: State<'_, Arc<RwLock<AppState>>>) -> Result<Option<String>
 
 #[tauri::command]
 pub fn obtener_capa_rgba(state: State<'_, Arc<RwLock<AppState>>>, id: String) -> Result<Vec<u8>, String> {
+    obtener_capa_rgba_core(state.inner(), id)
+}
+
+pub fn obtener_capa_rgba_core(state: &Arc<RwLock<AppState>>, id: String) -> Result<Vec<u8>, String> {
     // Read-only: extracts layer pixel data
     let state_lock = state.read();
     if let Some(layer) = state_lock.layers.iter().find(|l| l.id == id) {
@@ -171,6 +185,10 @@ pub fn obtener_capa_rgba(state: State<'_, Arc<RwLock<AppState>>>, id: String) ->
 
 #[tauri::command]
 pub fn obtener_capa_png(state: State<'_, Arc<RwLock<AppState>>>, id: String) -> Result<Vec<u8>, String> {
+    obtener_capa_png_core(state.inner(), id)
+}
+
+pub fn obtener_capa_png_core(state: &Arc<RwLock<AppState>>, id: String) -> Result<Vec<u8>, String> {
     // Read-only: encodes layer as PNG
     let state_lock = state.read();
     if let Some(layer) = state_lock.layers.iter().find(|l| l.id == id) {

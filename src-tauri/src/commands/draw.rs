@@ -35,8 +35,22 @@ fn hex_a_color(hex: &str, alpha: f32) -> Color {
 #[tauri::command]
 pub fn procesar_trazo(
     state: State<'_, Arc<RwLock<AppState>>>,
-    id_capa: String, 
-    puntos: Vec<PuntoTrazo>, 
+    id_capa: String,
+    puntos: Vec<PuntoTrazo>,
+    tool: String,
+    color: String,
+    size: f32,
+    opacity: f32,
+) -> Result<Option<LayerBounds>, String> {
+    procesar_trazo_core(state.inner(), id_capa, puntos, tool, color, size, opacity)
+}
+
+// honest-concurrency-tests (CONC-5): plain core fn over `&Arc<RwLock<AppState>>` so tests drive it
+// with a real Arc (no transmute). The `#[tauri::command]` wrapper is just the IPC boundary.
+pub fn procesar_trazo_core(
+    state: &Arc<RwLock<AppState>>,
+    id_capa: String,
+    puntos: Vec<PuntoTrazo>,
     tool: String,
     color: String,
     size: f32,
@@ -235,12 +249,11 @@ pub fn procesar_trazo(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::history::deshacer;
-    use crate::commands::layers::anadir_capa;
+    use crate::commands::history::deshacer_core;
+    use crate::commands::layers::anadir_capa_core;
 
-    fn mock_state<'a, T: Send + Sync + 'static>(val: &'a T) -> State<'a, T> {
-        unsafe { std::mem::transmute(val) }
-    }
+    // honest-concurrency-tests (CONC-5): tests call the `_core` fns with a real `Arc<RwLock<AppState>>`.
+    // The old `mock_state` `std::mem::transmute(&T -> tauri::State)` helper (undefined behavior) is gone.
 
     /// CONC-1 three-phase correctness: a stroke whose points fall OUTSIDE the current layer bounds
     /// triggers a resize. The split (Phase 1 short outer write for resize + Arc-clone; Phase 2 inner
@@ -251,15 +264,15 @@ mod tests {
     #[test]
     fn procesar_trazo_three_phase_resize_history_and_undo() {
         let state = Arc::new(RwLock::new(AppState::new()));
-        anadir_capa(mock_state(&state), "capa".to_string(), 32, 32).unwrap();
+        anadir_capa_core(&state, "capa".to_string(), 32, 32).unwrap();
 
         // Points to the LEFT/ABOVE the origin (negative coords) force a resize that moves layer.x/y.
         let puntos = vec![
             PuntoTrazo { x: -40.0, y: -30.0, p: 1.0 },
             PuntoTrazo { x: 10.0, y: 10.0, p: 1.0 },
         ];
-        let res = procesar_trazo(
-            mock_state(&state),
+        let res = procesar_trazo_core(
+            &state,
             "capa".to_string(),
             puntos,
             "brush".to_string(),
@@ -294,7 +307,7 @@ mod tests {
         };
         assert!(painted_before_undo > 0, "stroke must paint at least one opaque pixel");
 
-        let undone = deshacer(mock_state(&state)).unwrap();
+        let undone = deshacer_core(&state).unwrap();
         assert_eq!(undone.as_deref(), Some("capa"), "undo targets the painted layer");
 
         let painted_after_undo = {

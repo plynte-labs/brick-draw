@@ -18,13 +18,24 @@ fn color_distance(c1: PremultipliedColorU8, c2: PremultipliedColorU8) -> f32 {
 
 #[tauri::command]
 pub fn calcular_seleccion_varita(
-    state: tauri::State<'_, Arc<RwLock<AppState>>>, 
-    id_capa: String, 
+    state: tauri::State<'_, Arc<RwLock<AppState>>>,
+    id_capa: String,
     start_x: u32,
-    start_y: u32, 
-    tolerancia: f32 
+    start_y: u32,
+    tolerancia: f32,
 ) -> Result<Vec<u8>, String> {
-    
+    calcular_seleccion_varita_core(state.inner(), id_capa, start_x, start_y, tolerancia)
+}
+
+// honest-concurrency-tests (CONC-5): plain core fn over `&Arc<RwLock<AppState>>` so tests drive it
+// with a real Arc (no transmute). The `#[tauri::command]` wrapper is just the IPC boundary.
+pub fn calcular_seleccion_varita_core(
+    state: &Arc<RwLock<AppState>>,
+    id_capa: String,
+    start_x: u32,
+    start_y: u32,
+    tolerancia: f32,
+) -> Result<Vec<u8>, String> {
     let tolerancia = tolerancia.max(0.0).min(255.0);
 
     let global_mask = {

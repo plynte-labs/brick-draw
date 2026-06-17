@@ -64,10 +64,22 @@ fn atomic_write(target: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+// honest-concurrency-tests (CONC-5): every `#[tauri::command]` delegates to a plain `*_core` sibling
+// over `&Arc<RwLock<AppState>>`. Tests call the `_core` fns with a REAL Arc, so the unsound
+// `mock_state` `std::mem::transmute(&T -> tauri::State)` helper is gone. The command wrappers carry
+// only the IPC boundary (and the unused `AppHandle` for `guardar_dibujo`); all logic lives in `_core`.
+
 #[tauri::command]
 pub fn guardar_dibujo(
     _app: AppHandle,
     state: State<'_, Arc<RwLock<AppState>>>,
+    ruta: String,
+) -> Result<String, String> {
+    guardar_dibujo_core(state.inner(), ruta)
+}
+
+pub fn guardar_dibujo_core(
+    state: &Arc<RwLock<AppState>>,
     ruta: String,
 ) -> Result<String, String> {
     // ── CAPA 1: Validación estricta contra Path Traversal (defensa en profundidad) ──
@@ -225,6 +237,10 @@ pub fn guardar_dibujo(
 
 #[tauri::command]
 pub fn obtener_lienzo_png(state: tauri::State<'_, Arc<RwLock<AppState>>>) -> Result<Vec<u8>, String> {
+    obtener_lienzo_png_core(state.inner())
+}
+
+pub fn obtener_lienzo_png_core(state: &Arc<RwLock<AppState>>) -> Result<Vec<u8>, String> {
     // Read-only: composes canvas PNG for display. Returns Vec<u8> (master JSON transport).
     // No file I/O — returns bytes directly to frontend, safe from path traversal.
     // CONC-3 (lockfree-io-snapshot): byte-copy each layer's pixels + position/opacity under the short
@@ -273,6 +289,10 @@ pub fn obtener_lienzo_png(state: tauri::State<'_, Arc<RwLock<AppState>>>) -> Res
 
 #[tauri::command]
 pub fn obtener_mascara_png(state: tauri::State<'_, Arc<RwLock<AppState>>>) -> Result<Vec<u8>, String> {
+    obtener_mascara_png_core(state.inner())
+}
+
+pub fn obtener_mascara_png_core(state: &Arc<RwLock<AppState>>) -> Result<Vec<u8>, String> {
     // Read-only: generates mask PNG for display. Returns Vec<u8> (master JSON transport).
     // No file I/O — returns bytes directly to frontend, safe from path traversal.
     // CONC-3 (lockfree-io-snapshot): byte-copy the active layer's RGBA bytes under the short outer read
@@ -312,6 +332,10 @@ pub fn obtener_mascara_png(state: tauri::State<'_, Arc<RwLock<AppState>>>) -> Re
 
 #[tauri::command]
 pub fn cargar_png_en_capa(state: State<'_, Arc<RwLock<AppState>>>, id: String, png_bytes: Vec<u8>) -> Result<(), String> {
+    cargar_png_en_capa_core(state.inner(), id, png_bytes)
+}
+
+pub fn cargar_png_en_capa_core(state: &Arc<RwLock<AppState>>, id: String, png_bytes: Vec<u8>) -> Result<(), String> {
     if png_bytes.len() > MAX_PNG_SIZE_BYTES {
         return Err(format!("Imagen demasiado grande ({} MB). Límite: {} MB.",
             png_bytes.len() / (1024 * 1024), MAX_PNG_SIZE_BYTES / (1024 * 1024)));
@@ -481,6 +505,14 @@ pub fn guardar_proyecto_brick(
     ruta: String,
     metadata: CanvasMetadataDto,
 ) -> Result<String, String> {
+    guardar_proyecto_brick_core(state.inner(), ruta, metadata)
+}
+
+pub fn guardar_proyecto_brick_core(
+    state: &Arc<RwLock<AppState>>,
+    ruta: String,
+    metadata: CanvasMetadataDto,
+) -> Result<String, String> {
     // ── CAPAS 1, 2, 3: Validación contra Path Traversal, raíces de disco y carpetas críticas ──
     let path = std::path::Path::new(&ruta);
     if !path.is_absolute() {
@@ -631,6 +663,13 @@ pub fn guardar_proyecto_brick(
 #[tauri::command]
 pub fn cargar_proyecto_brick(
     state: State<'_, Arc<RwLock<AppState>>>,
+    ruta: String,
+) -> Result<ProyectoBrickResponse, String> {
+    cargar_proyecto_brick_core(state.inner(), ruta)
+}
+
+pub fn cargar_proyecto_brick_core(
+    state: &Arc<RwLock<AppState>>,
     ruta: String,
 ) -> Result<ProyectoBrickResponse, String> {
     // ── Validación de ruta y extensión .brick ──
@@ -786,8 +825,8 @@ pub fn cargar_proyecto_brick(
 mod tests {
     use super::*;
     use crate::state::AppState;
-    use crate::commands::layers::{anadir_capa, cambiar_opacidad_capa};
-    use crate::commands::draw::{procesar_trazo, PuntoTrazo};
+    use crate::commands::layers::{anadir_capa_core, cambiar_opacidad_capa_core};
+    use crate::commands::draw::{procesar_trazo_core, PuntoTrazo};
 
     fn preparar_directorio_prueba(base: std::path::PathBuf) -> Result<std::path::PathBuf, String> {
         if es_ruta_sistema_insegura(&base) {
@@ -839,27 +878,25 @@ mod tests {
             .join(file_name)
     }
 
-    fn mock_state<'a, T: Send + Sync + 'static>(val: &'a T) -> State<'a, T> {
-        unsafe { std::mem::transmute(val) }
-    }
+    // honest-concurrency-tests (CONC-5): tests call the `_core` fns with a real `Arc<RwLock<AppState>>`.
+    // The old `mock_state` `std::mem::transmute(&T -> tauri::State)` helper (undefined behavior) is gone.
 
     #[test]
     fn test_guardar_y_cargar_proyecto_brick() {
         let state = Arc::new(RwLock::new(AppState::new()));
-        let state_guard = mock_state(&state);
 
         // 1. Agregar dos capas de prueba
-        anadir_capa(state_guard.clone(), "capa_a".to_string(), 128, 128).unwrap();
-        anadir_capa(state_guard.clone(), "capa_b".to_string(), 128, 128).unwrap();
-        cambiar_opacidad_capa(state_guard.clone(), "capa_b".to_string(), 0.5).unwrap();
+        anadir_capa_core(&state, "capa_a".to_string(), 128, 128).unwrap();
+        anadir_capa_core(&state, "capa_b".to_string(), 128, 128).unwrap();
+        cambiar_opacidad_capa_core(&state, "capa_b".to_string(), 0.5).unwrap();
 
         // 2. Pintar algo en las capas para tener datos gráficos reales
         let puntos_a = vec![
             PuntoTrazo { x: 10.0, y: 10.0, p: 1.0 },
             PuntoTrazo { x: 50.0, y: 50.0, p: 1.0 },
         ];
-        procesar_trazo(
-            state_guard.clone(),
+        procesar_trazo_core(
+            &state,
             "capa_a".to_string(),
             puntos_a,
             "brush".to_string(),
@@ -872,8 +909,8 @@ mod tests {
             PuntoTrazo { x: 30.0, y: 30.0, p: 1.0 },
             PuntoTrazo { x: 90.0, y: 90.0, p: 1.0 },
         ];
-        procesar_trazo(
-            state_guard.clone(),
+        procesar_trazo_core(
+            &state,
             "capa_b".to_string(),
             puntos_b,
             "brush".to_string(),
@@ -929,8 +966,8 @@ mod tests {
         let project_path_str = project_path.to_string_lossy().to_string();
 
         // 4. Guardar proyecto
-        let save_res = guardar_proyecto_brick(
-            state_guard.clone(),
+        let save_res = guardar_proyecto_brick_core(
+            &state,
             project_path_str.clone(),
             metadata
         ).unwrap();
@@ -940,8 +977,8 @@ mod tests {
         assert!(project_path.exists());
 
         // 5. Cargar proyecto (reconstrucción y limpieza de historial)
-        let load_res = cargar_proyecto_brick(
-            state_guard.clone(),
+        let load_res = cargar_proyecto_brick_core(
+            &state,
             project_path_str.clone()
         ).unwrap();
 
@@ -1001,10 +1038,9 @@ mod tests {
         use std::io::Write as _;
 
         let state = Arc::new(RwLock::new(AppState::new()));
-        let guard = mock_state(&state);
 
         // Proyecto previo del usuario: una capa real que NO se debe perder si la carga se rechaza.
-        anadir_capa(guard.clone(), "original".to_string(), 32, 32).unwrap();
+        anadir_capa_core(&state, "original".to_string(), 32, 32).unwrap();
 
         // Construir un .brick malicioso: metadatos declaran una capa de 70000x70000 (> MAX_DIMENSION).
         let dir = std::env::current_dir().unwrap();
@@ -1022,7 +1058,7 @@ mod tests {
             zipw.finish().unwrap();
         }
 
-        let res = cargar_proyecto_brick(guard.clone(), path.to_string_lossy().to_string());
+        let res = cargar_proyecto_brick_core(&state, path.to_string_lossy().to_string());
         let _ = std::fs::remove_file(&path);
 
         assert!(res.is_err(), "una capa de 70000x70000 debe ser rechazada (cap MAX_DIMENSION)");

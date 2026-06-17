@@ -25,7 +25,10 @@ tauri-build = { version = "2.0.0", features = [] }
 
 [dependencies]
 # Tauri & Core Plugins
-tauri = { version = "2.0.0", features = ["test"] }
+# HYG-3: the `test` feature is NOT enabled here — production builds must not pull test scaffolding.
+# It is re-declared under [dev-dependencies] with `features = ["test"]`; Cargo unifies features across
+# the build graph, so test/dev builds still get it while `cargo build --release` does not.
+tauri = { version = "2.0.0" }
 tauri-plugin-opener = "2.0.0"
 tauri-plugin-dialog = "2.0.0"
 parking_lot = "0.12"
@@ -43,6 +46,8 @@ tiny-skia = "0.11" # Opcional: Para dibujar en la CPU muy rápido sobre un buffe
 
 [dev-dependencies]
 dhat = "0.3"
+# HYG-3: the Tauri `test` feature lives here so only test/dev builds pull the test scaffolding.
+tauri = { version = "2.0.0", features = ["test"] }
 
 [features]
 dhat-heap = []
