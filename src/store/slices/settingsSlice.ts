@@ -7,7 +7,10 @@ export const createSettingsSlice: AppSlice<SettingsSlice> = (set, get) => ({
     color: "#e8cdbb",
     size: 20,
     opacity: 1.0,
-    smoothing: 0.95,
+    // Estabilización por defecto MODERADA. Antes era 0.95 (lag extremo: el trazo se arrastraba muy
+    // atrás del cursor y la goma "cortaba a la mitad"). 0.5 suaviza sin desconectar del cursor;
+    // subíse a 0.95 en el slider "Suavizado" para entintado, o bajá a 0 para precisión total.
+    smoothing: 0.5,
   },
   keybinds: {
     undo: "ctrl+z",

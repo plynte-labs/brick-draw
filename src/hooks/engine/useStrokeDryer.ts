@@ -10,6 +10,8 @@ interface DryerProps {
   strokePointsRef: React.RefObject<{ x: number; y: number; p: number }[]>;
   componerLienzo: (isDrawing: boolean) => void;
   hasSelectionRef: React.RefObject<boolean>;
+  // Estabilización: punto crudo de levantamiento para el flush (evita que el trazo quede corto).
+  lastRawPoint: React.RefObject<{ x: number; y: number; p: number } | null>;
 }
 
 export const useStrokeDryer = ({
@@ -19,6 +21,7 @@ export const useStrokeDryer = ({
   strokePointsRef,
   componerLienzo,
   hasSelectionRef,
+  lastRawPoint,
 }: DryerProps) => {
   useEffect(() => {
     const globalUp = async () => {
@@ -32,6 +35,37 @@ export const useStrokeDryer = ({
         (l) => l.id === state.activeLayerId,
       );
       const { width, height } = state.canvasSize;
+
+      // ── ESTABILIZACIÓN — FLUSH del punto final ──
+      // El suavizado (EMA) deja el último punto procesado rezagado DETRÁS del cursor. Sin esto el
+      // trazo (sobre todo la goma rápida) "se corta a la mitad". Agregamos el punto CRUDO de
+      // levantamiento al cristal húmedo y a strokePoints para que el trazo llegue a donde soltaste.
+      if (
+        state.settings.tool !== "move" &&
+        lastRawPoint.current &&
+        strokePointsRef.current &&
+        strokePointsRef.current.length > 0
+      ) {
+        const raw = lastRawPoint.current;
+        const last = strokePointsRef.current[strokePointsRef.current.length - 1];
+        if (Math.abs(raw.x - last.x) > 0.5 || Math.abs(raw.y - last.y) > 0.5) {
+          const wetCtx = wetLayerRef.current?.getContext("2d");
+          if (wetCtx) {
+            wetCtx.lineCap = "round";
+            wetCtx.lineJoin = "round";
+            wetCtx.strokeStyle =
+              state.settings.tool === "eraser"
+                ? "rgba(255, 255, 255, 0.4)"
+                : state.settings.color;
+            wetCtx.lineWidth = state.settings.size * (raw.p || 0.5) * 2;
+            wetCtx.beginPath();
+            wetCtx.moveTo(last.x, last.y);
+            wetCtx.lineTo(raw.x, raw.y);
+            wetCtx.stroke();
+          }
+          strokePointsRef.current.push({ x: raw.x, y: raw.y, p: raw.p });
+        }
+      }
 
       // 1. 🚀 ESTAMPADO MATEMÁTICO PERFECTO EN JS
       if (activeLayer && wetLayerRef.current) {
@@ -166,5 +200,6 @@ export const useStrokeDryer = ({
     strokePointsRef,
     componerLienzo,
     hasSelectionRef,
+    lastRawPoint,
   ]);
 };

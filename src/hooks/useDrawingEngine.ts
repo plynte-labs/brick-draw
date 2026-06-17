@@ -15,6 +15,9 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
   const currentPoint = useRef({ x: 0, y: 0 });
   const lastPoint = useRef({ x: 0, y: 0 });
   const strokePointsRef = useRef<{ x: number; y: number; p: number }[]>([]);
+  // Estabilización: último punto CRUDO del puntero (sin suavizar). Al soltar, el dryer lo agrega
+  // como punto final para que el trazo SIEMPRE llegue a donde levantaste (si no, el EMA lo deja corto).
+  const lastRawPointRef = useRef<{ x: number; y: number; p: number } | null>(null);
 
   const {
     wetLayerRef,
@@ -49,6 +52,7 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
     strokePointsRef,
     componerLienzo,
     hasSelectionRef,
+    lastRawPoint: lastRawPointRef,
   });
 
   // ==========================================
@@ -120,6 +124,7 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
     clientY: number,
     pressure: number,
   ) => {
+    lastRawPointRef.current = null; // nuevo trazo: sin punto de flush todavía
     const ctx = buildEngineContext(clientX, clientY, pressure);
     if (!ctx) return;
     const strategy = getToolStrategy(ctx.state.settings.tool);
@@ -148,6 +153,13 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
 
     const strategy = getToolStrategy(ctx.state.settings.tool);
     const needsRender = strategy.onPointerMove(ctx);
+
+    // Estabilización: registrar el punto CRUDO del último evento (no suavizado) para el flush al soltar.
+    const lastEv = events[events.length - 1];
+    const rawCoords = getCoords(lastEv.clientX, lastEv.clientY);
+    if (rawCoords) {
+      lastRawPointRef.current = { x: rawCoords.x, y: rawCoords.y, p: lastEv.pressure || 0.5 };
+    }
 
     if (needsRender && !isRendering.current) {
       isRendering.current = true;
