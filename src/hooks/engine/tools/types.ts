@@ -6,6 +6,9 @@ export interface EngineContext {
   state: AppState;
   coords: { x: number; y: number };
   pressure: number;
+  // Tipo de puntero del evento ('pen' | 'mouse' | 'touch'). Permite presión real con tableta y
+  // ancho completo con mouse (que reporta 0.5). Vacío si no se conoce.
+  pointerType: string;
   events?: PointerEvent[]; // Solo se usa al arrastrar el lápiz
   refs: {
     wetLayer: React.RefObject<OffscreenCanvas | null>;

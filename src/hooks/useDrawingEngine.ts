@@ -5,6 +5,7 @@ import { useRenderer } from "./engine/useRenderer";
 import { useStrokeDryer } from "./engine/useStrokeDryer";
 import { getToolStrategy } from "./engine/tools";
 import { EngineContext } from "./engine/tools/types";
+import { resolvePressure } from "./engine/pressure";
 
 export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | null>) => {
   const [, setIsDrawing] = useState(false);
@@ -87,6 +88,7 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
     clientX: number,
     clientY: number,
     pressure: number,
+    pointerType: string,
     events?: PointerEvent[],
   ): EngineContext | null => {
     const state = useAppStore.getState();
@@ -100,6 +102,7 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
       state,
       coords,
       pressure,
+      pointerType,
       events,
       refs: {
         wetLayer: wetLayerRef,
@@ -123,9 +126,10 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
     clientX: number,
     clientY: number,
     pressure: number,
+    pointerType: string,
   ) => {
     lastRawPointRef.current = null; // nuevo trazo: sin punto de flush todavía
-    const ctx = buildEngineContext(clientX, clientY, pressure);
+    const ctx = buildEngineContext(clientX, clientY, pressure, pointerType);
     if (!ctx) return;
     const strategy = getToolStrategy(ctx.state.settings.tool);
     await strategy.onPointerDown(ctx);
@@ -147,6 +151,7 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
       events[0].clientX,
       events[0].clientY,
       events[0].pressure || 0.5,
+      events[0].pointerType ?? "",
       events,
     );
     if (!ctx) return;
@@ -158,7 +163,11 @@ export const useDrawingEngine = (canvasRef: React.RefObject<HTMLCanvasElement | 
     const lastEv = events[events.length - 1];
     const rawCoords = getCoords(lastEv.clientX, lastEv.clientY);
     if (rawCoords) {
-      lastRawPointRef.current = { x: rawCoords.x, y: rawCoords.y, p: lastEv.pressure || 0.5 };
+      lastRawPointRef.current = {
+        x: rawCoords.x,
+        y: rawCoords.y,
+        p: resolvePressure(lastEv.pointerType, lastEv.pressure),
+      };
     }
 
     if (needsRender && !isRendering.current) {

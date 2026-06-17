@@ -1,19 +1,23 @@
 import { DrawingToolStrategy } from "./types";
+import { resolvePressure } from "../pressure";
 
 export const brushTool: DrawingToolStrategy = {
-  onPointerDown: ({ state, coords, pressure, refs, actions }) => {
+  onPointerDown: ({ state, coords, pressure, pointerType, refs, actions }) => {
     actions.prepararCache();
     refs.currentPoint.current = coords;
     refs.lastPoint.current = coords;
     actions.setIsDrawing(true);
     refs.isDrawing.current = true;
 
+    // Soporte de tableta: lápiz → presión real; mouse → ancho completo.
+    const p = resolvePressure(pointerType, pressure);
+
     // 🚀 FIX: El truco del punto fantasma.
     // Añadimos una coordenada idéntica desplazada 0.01px para engañar a Rust
     // y que dibuje un punto redondo perfecto aunque no movamos el ratón.
     refs.strokePoints.current = [
-      { x: coords.x, y: coords.y, p: pressure },
-      { x: coords.x + 0.01, y: coords.y + 0.01, p: pressure },
+      { x: coords.x, y: coords.y, p },
+      { x: coords.x + 0.01, y: coords.y + 0.01, p },
     ];
 
     if (refs.wetLayer.current) {
@@ -31,7 +35,7 @@ export const brushTool: DrawingToolStrategy = {
             ? "rgba(255, 255, 255, 0.4)"
             : state.settings.color;
 
-        wetCtx.lineWidth = state.settings.size * pressure * 2;
+        wetCtx.lineWidth = state.settings.size * p * 2;
 
         wetCtx.beginPath();
         wetCtx.moveTo(coords.x, coords.y);
@@ -69,7 +73,8 @@ export const brushTool: DrawingToolStrategy = {
       const coords = actions.getCoords(event.clientX, event.clientY);
       if (!coords) continue;
 
-      const pressure = event.pressure || 0.5;
+      // Soporte de tableta: lápiz → presión real por evento; mouse → ancho completo.
+      const pressure = resolvePressure(event.pointerType, event.pressure);
 
       if (state.settings.smoothing === 0) {
         refs.currentPoint.current = coords;

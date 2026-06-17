@@ -97,7 +97,9 @@ export const DrawingCanvas = () => {
             return;
         }
 
-        startDrawing(e.clientX, e.clientY, e.pressure || 0.5);
+        // Soporte de tableta: pasamos el tipo de puntero ('pen'/'mouse'/'touch') para resolver
+        // la presión (lápiz = presión real → grosor variable; mouse = ancho completo).
+        startDrawing(e.clientX, e.clientY, e.pressure || 0.5, e.pointerType);
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
