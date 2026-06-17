@@ -138,11 +138,42 @@ pub fn guardar_dibujo(
         }
     }
 
-    // ── Composición del lienzo (lectura del estado) ──
-    let state_lock = state.read();
-
-    let width = state_lock.canvas_width;
-    let height = state_lock.canvas_height;
+    // ── Composición del lienzo ──
+    // CONC-3 (lockfree-io-snapshot): hold the outer read lock long enough to snapshot BOTH the
+    // position/opacity metadata AND the raw pixel bytes for every visible layer together. Byte-copying
+    // the buffer data under the same inner buffer.read() that reads width/height/x/y ensures the
+    // composited position and pixels are from the same atomic instant — a concurrent procesar_trazo
+    // Phase 1 that resizes the buffer (replacing *pixmap and updating layer.x/y) cannot split the
+    // metadata from the pixels. The compositing, PNG encode, size check, and atomic disk write below
+    // then run with NO outer lock held, so concurrent strokes are not blocked for the full flush.
+    struct LayerSnapshot {
+        pixels: Vec<u8>,
+        width: u32,
+        height: u32,
+        x: f32,
+        y: f32,
+        opacity: f32,
+    }
+    let (width, height, snapshots): (u32, u32, Vec<LayerSnapshot>) = {
+        let state_lock = state.read();
+        let snapshots = state_lock
+            .layers
+            .iter()
+            .filter(|l| l.visible && l.opacity > 0.0)
+            .map(|l| {
+                let buf = l.buffer.read();
+                LayerSnapshot {
+                    pixels: buf.data().to_vec(),
+                    width: buf.width(),
+                    height: buf.height(),
+                    x: l.x,
+                    y: l.y,
+                    opacity: l.opacity,
+                }
+            })
+            .collect();
+        (state_lock.canvas_width, state_lock.canvas_height, snapshots)
+    }; // ── outer read guard + all inner buffer guards dropped here: compose/encode/write run lock-free ──
 
     if width == 0 || height == 0 {
         return Err("Lienzo no inicializado".to_string());
@@ -151,22 +182,19 @@ pub fn guardar_dibujo(
     let mut master_pixmap = Pixmap::new(width, height).ok_or("Error reservando memoria")?;
     master_pixmap.fill(Color::WHITE);
 
-    for layer in state_lock.layers.iter() {
-        if !layer.visible || layer.opacity <= 0.0 {
-            continue;
+    for snap in &snapshots {
+        // PixmapRef::from_bytes validates dimensions internally (returns None on invalid w/h/len).
+        if let Some(src_ref) = tiny_skia::PixmapRef::from_bytes(&snap.pixels, snap.width, snap.height) {
+            let mut pixmap_paint = PixmapPaint::default();
+            pixmap_paint.opacity = snap.opacity;
+            master_pixmap.draw_pixmap(
+                snap.x as i32, snap.y as i32,
+                src_ref,
+                &pixmap_paint,
+                Transform::identity(),
+                None,
+            );
         }
-
-        let buffer = layer.buffer.read();
-        let mut pixmap_paint = PixmapPaint::default();
-        pixmap_paint.opacity = layer.opacity;
-
-        master_pixmap.draw_pixmap(
-            layer.x as i32, layer.y as i32,
-            buffer.as_ref(),
-            &pixmap_paint,
-            Transform::identity(),
-            None,
-        );
     }
 
     // ── Codificación PNG en memoria ──
@@ -185,8 +213,7 @@ pub fn guardar_dibujo(
     // Si falla a mitad, el PNG previo en disco queda intacto (no se corrompe).
     atomic_write(&canonical, &png_data)?;
 
-    // ── Actualizar métricas de rate limiting ──
-    drop(state_lock);
+    // ── Actualizar métricas de rate limiting (short write lock) ──
     {
         let mut state_lock = state.write();
         state_lock.last_save_timestamp_ms = now;
@@ -198,30 +225,47 @@ pub fn guardar_dibujo(
 
 #[tauri::command]
 pub fn obtener_lienzo_png(state: tauri::State<'_, Arc<RwLock<AppState>>>) -> Result<Vec<u8>, String> {
-    // Read-only: composes canvas PNG for display.
+    // Read-only: composes canvas PNG for display. Returns Vec<u8> (master JSON transport).
     // No file I/O — returns bytes directly to frontend, safe from path traversal.
-    let state_lock = state.read();
+    // CONC-3 (lockfree-io-snapshot): byte-copy each layer's pixels + position/opacity under the short
+    // outer read lock, drop it, then composite + PNG-encode lock-free. This mirrors guardar_dibujo and
+    // prevents a long PNG encode from blocking procesar_trazo Phase 1 writers for the full encode.
+    struct LayerSnapshot {
+        pixels: Vec<u8>,
+        width: u32,
+        height: u32,
+        x: f32,
+        y: f32,
+        opacity: f32,
+        visible: bool,
+    }
+    let (canvas_w, canvas_h, snapshots) = {
+        let state_lock = state.read();
+        let snaps: Vec<LayerSnapshot> = state_lock.layers.iter().map(|l| {
+            let buf = l.buffer.read();
+            LayerSnapshot {
+                pixels: buf.data().to_vec(),
+                width: buf.width(),
+                height: buf.height(),
+                x: l.x,
+                y: l.y,
+                opacity: l.opacity,
+                visible: l.visible,
+            }
+        }).collect();
+        (state_lock.canvas_width, state_lock.canvas_height, snaps)
+    }; // ── outer read guard + inner buffer guards dropped: encode runs lock-free ──
 
-    let width = state_lock.canvas_width;
-    let height = state_lock.canvas_height;
-
-    let mut master_pixmap = Pixmap::new(width, height).ok_or("Error memoria")?;
+    let mut master_pixmap = Pixmap::new(canvas_w, canvas_h).ok_or("Error memoria")?;
     master_pixmap.fill(Color::TRANSPARENT);
 
-    for layer in state_lock.layers.iter() {
-        if !layer.visible || layer.opacity <= 0.0 { continue; }
-
-        let buffer = layer.buffer.read();
-        let mut paint = PixmapPaint::default();
-        paint.opacity = layer.opacity;
-
-        master_pixmap.draw_pixmap(
-            layer.x as i32, layer.y as i32,
-            buffer.as_ref(),
-            &paint,
-            Transform::identity(),
-            None,
-        );
+    for snap in &snapshots {
+        if !snap.visible || snap.opacity <= 0.0 { continue; }
+        if let Some(src_ref) = tiny_skia::PixmapRef::from_bytes(&snap.pixels, snap.width, snap.height) {
+            let mut paint = PixmapPaint::default();
+            paint.opacity = snap.opacity;
+            master_pixmap.draw_pixmap(snap.x as i32, snap.y as i32, src_ref, &paint, Transform::identity(), None);
+        }
     }
 
     master_pixmap.encode_png().map_err(|e| format!("Error PNG: {}", e))
@@ -229,21 +273,22 @@ pub fn obtener_lienzo_png(state: tauri::State<'_, Arc<RwLock<AppState>>>) -> Res
 
 #[tauri::command]
 pub fn obtener_mascara_png(state: tauri::State<'_, Arc<RwLock<AppState>>>) -> Result<Vec<u8>, String> {
-    // Read-only: generates mask PNG for display.
+    // Read-only: generates mask PNG for display. Returns Vec<u8> (master JSON transport).
     // No file I/O — returns bytes directly to frontend, safe from path traversal.
-    // Fixed: was using Mutex<AppState> but AppState uses RwLock — now consistent.
-    let state_lock = state.read();
-
-    let active_id = &state_lock.active_layer_id;
-    let layer = state_lock.layers.iter().find(|l| l.id == *active_id).ok_or("Capa no activa")?;
-
-    let pixmap = layer.buffer.read();
-    let width = pixmap.width();
-    let height = pixmap.height();
+    // CONC-3 (lockfree-io-snapshot): byte-copy the active layer's RGBA bytes under the short outer read
+    // lock, drop it, then build the mask + PNG-encode lock-free so writers are not blocked for the encode.
+    let (width, height, src_data): (u32, u32, Vec<u8>) = {
+        let state_lock = state.read();
+        let active_id = &state_lock.active_layer_id;
+        let layer = state_lock.layers.iter().find(|l| l.id == *active_id).ok_or("Capa no activa")?;
+        let pixmap = layer.buffer.read();
+        let w = pixmap.width();
+        let h = pixmap.height();
+        let data = pixmap.data().to_vec();
+        (w, h, data)
+    }; // ── outer read guard + inner buffer guard dropped: encode runs lock-free ──
 
     let mut mask_pixmap = Pixmap::new(width, height).ok_or("Error memoria")?;
-
-    let src_data = pixmap.data();
     let mask_data = mask_pixmap.data_mut();
 
     for i in 0..(src_data.len() / 4) {
@@ -492,28 +537,43 @@ pub fn guardar_proyecto_brick(
         .compression_level(Some(9));
 
     // ── Sincronizar metadatos con el AppState real en Rust (fuente de verdad definitiva) ──
+    // CONC-3 (lockfree-io-snapshot): under a SHORT read lock we (1) sync metadata and (2) take a
+    // point-in-time SNAPSHOT of every layer's raw bytes together with its width/height/x/y/opacity.
+    // Byte-copying the buffer (instead of Arc-cloning) under the SAME inner buffer.read() that reads
+    // w/h guarantees the metadata and the written bytes are a consistent instant even if a concurrent
+    // procesar_trazo resizes the layer after we drop the guard. The CPU-bound Deflate-9 compression,
+    // sync_all and atomic rename below then run with NO outer lock held. The missing-layer error (IO-3)
+    // is detected HERE, under the short lock, BEFORE any temp file is created — so the prior .brick stays
+    // intact and no scratch file leaks.
     let mut metadata = metadata;
-    let state_lock = state.read();
-    metadata.canvas_width = state_lock.canvas_width;
-    metadata.canvas_height = state_lock.canvas_height;
-    metadata.active_layer_id = state_lock.active_layer_id.clone();
+    let mut layer_raw_snapshots: HashMap<String, Vec<u8>> = HashMap::new();
+    {
+        let state_lock = state.read();
+        metadata.canvas_width = state_lock.canvas_width;
+        metadata.canvas_height = state_lock.canvas_height;
+        metadata.active_layer_id = state_lock.active_layer_id.clone();
 
-    for layer_meta in &mut metadata.layers {
-        if let Some(layer) = state_lock.layers.iter().find(|l| l.id == layer_meta.id) {
-            let buffer_lock = layer.buffer.read();
-            layer_meta.width = buffer_lock.width();
-            layer_meta.height = buffer_lock.height();
-            layer_meta.x = layer.x;
-            layer_meta.y = layer.y;
-            layer_meta.opacity = layer.opacity;
-            layer_meta.visible = layer.visible;
+        for layer_meta in &mut metadata.layers {
+            if let Some(layer) = state_lock.layers.iter().find(|l| l.id == layer_meta.id) {
+                let buffer_lock = layer.buffer.read();
+                layer_meta.width = buffer_lock.width();
+                layer_meta.height = buffer_lock.height();
+                layer_meta.x = layer.x;
+                layer_meta.y = layer.y;
+                layer_meta.opacity = layer.opacity;
+                layer_meta.visible = layer.visible;
+                // Byte-copy the buffer together with its w/h so the saved bytes match the metadata.
+                layer_raw_snapshots.insert(layer_meta.id.clone(), buffer_lock.data().to_vec());
+            } else {
+                // IO-3: error BEFORE any temp file is created — under the short lock.
+                return Err(format!("Error: Capa '{}' no encontrada en el motor gráfico de Rust.", layer_meta.id));
+            }
         }
-    }
+    } // ── outer read guard dropped here: all ZIP/Deflate/disk I/O below runs lock-free ──
 
     // ── Guardado ATÓMICO: escribimos el ZIP a un temporal hermano (mismo volumen), hacemos
-    //    sync_all y luego rename sobre el destino. Si algo falla a mitad (disco lleno, capa
-    //    faltante, crash), el .brick PREVIO queda intacto y el temporal se borra. Antes se
-    //    creaba el archivo destino directamente y un fallo lo dejaba corrupto/truncado. ──
+    //    sync_all y luego rename sobre el destino. Si algo falla a mitad (disco lleno, crash), el
+    //    .brick PREVIO queda intacto y el temporal se borra. ──
     let tmp_path = temp_sibling(&canonical)?;
     let write_result = (|| -> Result<(), String> {
         let file = std::fs::File::create(&tmp_path)
@@ -528,18 +588,17 @@ pub fn guardar_proyecto_brick(
         zip.write_all(json_data.as_bytes())
             .map_err(|e| format!("Error al escribir metadatos en canvas.json: {}", e))?;
 
-        // ── Escribir capas nativas como bytes puros .raw ──
+        // ── Escribir capas nativas como bytes puros .raw desde el snapshot lock-free ──
         for layer_meta in &metadata.layers {
-            if let Some(layer) = state_lock.layers.iter().find(|l| l.id == layer_meta.id) {
-                let buffer_lock = layer.buffer.read();
-                let file_name = format!("layer_{}.raw", layer.id);
-                zip.start_file(&file_name, options)
-                    .map_err(|e| format!("Error al iniciar archivo de capa '{}' en el contenedor: {}", layer.id, e))?;
-                zip.write_all(buffer_lock.data())
-                    .map_err(|e| format!("Error al escribir bytes crudos de la capa '{}': {}", layer.id, e))?;
-            } else {
-                return Err(format!("Error: Capa '{}' no encontrada en el motor gráfico de Rust.", layer_meta.id));
-            }
+            // The snapshot is guaranteed present (missing layers errored under the short lock above).
+            let raw = layer_raw_snapshots
+                .get(&layer_meta.id)
+                .ok_or_else(|| format!("Error: Capa '{}' no encontrada en el motor gráfico de Rust.", layer_meta.id))?;
+            let file_name = format!("layer_{}.raw", layer_meta.id);
+            zip.start_file(&file_name, options)
+                .map_err(|e| format!("Error al iniciar archivo de capa '{}' en el contenedor: {}", layer_meta.id, e))?;
+            zip.write_all(raw)
+                .map_err(|e| format!("Error al escribir bytes crudos de la capa '{}': {}", layer_meta.id, e))?;
         }
 
         let finished = zip
@@ -560,7 +619,6 @@ pub fn guardar_proyecto_brick(
         return Err(format!("Error al confirmar el guardado atómico (rename): {}", e));
     }
 
-    drop(state_lock);
     {
         let mut state_lock = state.write();
         state_lock.last_save_timestamp_ms = now;
