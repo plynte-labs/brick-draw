@@ -1,5 +1,6 @@
 // src/store/slices/uiSlice.ts
 import { AppSlice, UISlice } from "../types";
+import { fitToView } from "../../hooks/engine/camera";
 
 export const createUISlice: AppSlice<UISlice> = (set) => ({
   isLayerPanelOpen: true,
@@ -24,22 +25,16 @@ export const createUISlice: AppSlice<UISlice> = (set) => ({
       const screenW = containerWidth || window.innerWidth;
       const screenH = containerHeight || window.innerHeight;
 
-      // 🚀 MATEMÁTICA PERFECTA: Calculamos el zoom óptimo para encajar el canvas con 15% de margen
-      const margin = 0.85;
-      const fitZoom = Math.min(
-        (screenW * margin) / state.canvasSize.width,
-        (screenH * margin) / state.canvasSize.height
+      // Pure fit math lives in camera.ts (centered, clamped, zero-dim guarded).
+      const camera = fitToView(
+        state.canvasSize.width,
+        state.canvasSize.height,
+        screenW,
+        screenH,
       );
-      
-      // Limitamos el zoom de encaje automático para que no sea diminuto ni gigante
-      const zoom = Math.max(0.1, Math.min(fitZoom, 2.0));
-
-      // Centramos exactamente el lienzo escalado en la pantalla
-      const x = (screenW - state.canvasSize.width * zoom) / 2;
-      const y = (screenH - state.canvasSize.height * zoom) / 2;
 
       return {
-        camera: { x, y, zoom },
+        camera,
         triggerRender: state.triggerRender + 1,
       };
     }),

@@ -1,6 +1,7 @@
 // src/components/Toolbar/StatusBar.tsx
 import { useEffect, useState } from "react";
 import { useAppStore } from "../../store/useStore";
+import { zoomAt } from "../../hooks/engine/camera";
 import { FaPen, FaEraser, FaHistory, FaCompressArrowsAlt, FaSearchPlus, FaSearchMinus, FaGithub } from "react-icons/fa";
 
 export const StatusBar = () => {
@@ -18,24 +19,16 @@ export const StatusBar = () => {
         return () => window.removeEventListener("plynte-coords", handleCoordsUpdate);
     }, []);
 
-    // 🚀 FUNCIÓN: Zoom con botones centrado en la pantalla
+    // 🚀 FUNCIÓN: Zoom con botones anclado al centro visual del lienzo
     const handleZoom = (factor: number) => {
         // Buscamos el centro visual del contenedor del lienzo
         const canvasEl = document.querySelector('canvas');
         const centerX = canvasEl ? canvasEl.clientWidth / 2 : window.innerWidth / 2;
         const centerY = canvasEl ? canvasEl.clientHeight / 2 : window.innerHeight / 2;
 
-        let newZoom = camera.zoom * factor;
-        newZoom = Math.max(0.1, Math.min(newZoom, 10)); // Límite 10% a 1000%
-
-        // Matemática para mantener el centro estático
-        const dx = centerX - camera.x;
-        const dy = centerY - camera.y;
-
-        const newX = centerX - dx * (newZoom / camera.zoom);
-        const newY = centerY - dy * (newZoom / camera.zoom);
-
-        setCamera({ zoom: newZoom, x: newX, y: newY });
+        // Pure anchor math lives in camera.ts (center stays fixed, 10%–1000%).
+        const next = zoomAt(camera, centerX, centerY, factor, 0.1, 10);
+        setCamera(next);
     };
 
     return (
