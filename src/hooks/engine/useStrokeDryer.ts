@@ -151,44 +151,53 @@ export const useStrokeDryer = ({
           strokePointsRef.current.length > 1
         ) {
           // Si es Pincel o Goma, seguimos enviando vectores rápidos
+          // Snapshot de los puntos de ESTE trazo: procesarTrazo es async y, si el usuario arranca
+          // otro trazo durante el await, strokePointsRef.current ya sería del trazo NUEVO.
+          const pointsThisStroke = strokePointsRef.current.slice();
           try {
-            // 🚀 1. RECIBIMOS LA RESPUESTA DE RUST (LayerBounds)
+            // 🚀 1. Commit del trazo a Rust (SIEMPRE corre — confirma el dibujo/borrado nativo).
             const res = await procesarTrazo(
               activeLayer.id,
-              strokePointsRef.current,
+              pointsThisStroke,
               state.settings.tool,
               state.settings.color,
               state.settings.size,
               state.settings.opacity
             );
 
-            // 🚀 2. SI RUST EXPANDIÓ LA CAPA, ACTUALIZAMOS REACT INMEDIATAMENTE
-            if (res.success && res.data) {
-              useAppStore
-                .getState()
-                .setLayerPosition(activeLayer.id, res.data.x, res.data.y);
+            // ── RACE GUARD ──
+            // Si durante el await empezó un trazo NUEVO (isDrawing volvió a true), NO tocamos los
+            // refs compartidos (wet, strokePoints) ni la composición: ya pertenecen al trazo nuevo.
+            // Antes, el dryer async del trazo anterior limpiaba el wet y reseteaba strokePoints del
+            // trazo nuevo → "la goma no toma desde el clic, arranca desde la mitad del recorrido".
+            if (!isDrawingRef.current) {
+              if (res.success && res.data) {
+                useAppStore
+                  .getState()
+                  .setLayerPosition(activeLayer.id, res.data.x, res.data.y);
+              }
+              const wetCtx = wetLayerRef.current?.getContext("2d");
+              if (wetCtx) {
+                wetCtx.clearRect(
+                  0,
+                  0,
+                  state.canvasSize.width,
+                  state.canvasSize.height,
+                );
+              }
+              componerLienzo(false);
             }
-
-            // Limpiamos la capa húmeda porque ya se secó en Rust
-            const wetCtx = wetLayerRef.current?.getContext("2d");
-            if (wetCtx) {
-              wetCtx.clearRect(
-                0,
-                0,
-                state.canvasSize.width,
-                state.canvasSize.height,
-              );
-            }
-
-            // Pedimos la foto final
-            componerLienzo(false);
           } catch (error) {
             console.error("Error secando el trazo:", error);
           }
         }
       }
 
-      if (strokePointsRef.current) strokePointsRef.current.length = 0;
+      // Reset de puntos SOLO si no hay un trazo nuevo en curso (si lo hay, su onPointerDown ya los
+      // reinicializó; borrarlos acá cortaría el trazo nuevo).
+      if (!isDrawingRef.current && strokePointsRef.current) {
+        strokePointsRef.current.length = 0;
+      }
     };
 
     window.addEventListener("pointerup", globalUp);
