@@ -1,5 +1,5 @@
 // src-tauri/src/commands/layers.rs
-use crate::state::{AppState, NativeLayer};
+use crate::state::{AppState, HistoryOp, LayerSnapshot, NativeLayer};
 use std::sync::Arc;
 use parking_lot::RwLock;
 use tiny_skia::Pixmap;
@@ -68,8 +68,15 @@ pub fn cambiar_opacidad_capa(state: tauri::State<'_, Arc<RwLock<AppState>>>, id:
 
 pub fn cambiar_opacidad_capa_core(state: &Arc<RwLock<AppState>>, id: String, opacity: f32) -> Result<(), String> {
     let mut state_lock = state.write();
-    if let Some(layer) = state_lock.layers.iter_mut().find(|l| l.id == id) {
-        layer.opacity = opacity;
+    // Capture before-state for the inverse op, then mutate.
+    let prev = state_lock.layers.iter().find(|l| l.id == id).map(|l| l.opacity);
+    if let Some(from) = prev {
+        if from != opacity {
+            if let Some(layer) = state_lock.layers.iter_mut().find(|l| l.id == id) {
+                layer.opacity = opacity;
+            }
+            state_lock.history.record(HistoryOp::OpacityChange { id, from, to: opacity });
+        }
     }
     Ok(())
 }
@@ -81,8 +88,14 @@ pub fn cambiar_visibilidad_capa(state: tauri::State<'_, Arc<RwLock<AppState>>>, 
 
 pub fn cambiar_visibilidad_capa_core(state: &Arc<RwLock<AppState>>, id: String, visible: bool) -> Result<(), String> {
     let mut state_lock = state.write();
-    if let Some(layer) = state_lock.layers.iter_mut().find(|l| l.id == id) {
-        layer.visible = visible;
+    let prev = state_lock.layers.iter().find(|l| l.id == id).map(|l| l.visible);
+    if let Some(from) = prev {
+        if from != visible {
+            if let Some(layer) = state_lock.layers.iter_mut().find(|l| l.id == id) {
+                layer.visible = visible;
+            }
+            state_lock.history.record(HistoryOp::VisibilityChange { id, from, to: visible });
+        }
     }
     Ok(())
 }
@@ -94,10 +107,39 @@ pub fn eliminar_capa(state: tauri::State<'_, Arc<RwLock<AppState>>>, id: String)
 
 pub fn eliminar_capa_core(state: &Arc<RwLock<AppState>>, id: String) -> Result<(), String> {
     let mut state_lock = state.write();
-    state_lock.layers.retain(|layer| layer.id != id);
+
+    // Capture a full owned snapshot (cloned Pixmap + metadata + z-order index) BEFORE removing, so
+    // the deletion can be undone by reinserting the layer exactly where it was.
+    let index = match state_lock.layers.iter().position(|l| l.id == id) {
+        Some(i) => i,
+        None => return Ok(()),
+    };
+    let prev_active_id = state_lock.active_layer_id.clone();
+    let snapshot = {
+        let layer = &state_lock.layers[index];
+        LayerSnapshot {
+            id: layer.id.clone(),
+            opacity: layer.opacity,
+            visible: layer.visible,
+            x: layer.x,
+            y: layer.y,
+            pixmap: layer.buffer.read().clone(),
+        }
+    };
+
+    state_lock.layers.remove(index);
     if state_lock.active_layer_id == id {
         state_lock.active_layer_id = state_lock.layers.last().map(|l| l.id.clone()).unwrap_or_default();
     }
+
+    // The layer is now removed, so the recorded op assumes `currently_removed: true` — applying it
+    // (via deshacer) reinserts the layer.
+    state_lock.history.record(HistoryOp::LayerDelete {
+        index,
+        prev_active_id,
+        snapshot,
+        currently_removed: true,
+    });
     Ok(())
 }
 
@@ -108,9 +150,15 @@ pub fn reordenar_capas(state: tauri::State<'_, Arc<RwLock<AppState>>>, nuevos_id
 
 pub fn reordenar_capas_core(state: &Arc<RwLock<AppState>>, nuevos_ids: Vec<String>) -> Result<(), String> {
     let mut state_lock = state.write();
+    // Capture the current z-order before sorting so the reorder can be inverted.
+    let from_order: Vec<String> = state_lock.layers.iter().map(|l| l.id.clone()).collect();
     state_lock.layers.sort_by_key(|layer| {
         nuevos_ids.iter().position(|id| id == &layer.id).unwrap_or(usize::MAX)
     });
+    let to_order: Vec<String> = state_lock.layers.iter().map(|l| l.id.clone()).collect();
+    if from_order != to_order {
+        state_lock.history.record(HistoryOp::LayerReorder { from_order, to_order });
+    }
     Ok(())
 }
 
@@ -121,9 +169,15 @@ pub fn mover_capa(state: tauri::State<'_, Arc<RwLock<AppState>>>, id: String, x:
 
 pub fn mover_capa_core(state: &Arc<RwLock<AppState>>, id: String, x: f32, y: f32) -> Result<(), String> {
     let mut state_lock = state.write();
-    if let Some(layer) = state_lock.layers.iter_mut().find(|l| l.id == id) {
-        layer.x = x;
-        layer.y = y;
+    let prev = state_lock.layers.iter().find(|l| l.id == id).map(|l| (l.x, l.y));
+    if let Some(from) = prev {
+        if from != (x, y) {
+            if let Some(layer) = state_lock.layers.iter_mut().find(|l| l.id == id) {
+                layer.x = x;
+                layer.y = y;
+            }
+            state_lock.history.record(HistoryOp::LayerMove { id, from, to: (x, y) });
+        }
     }
     Ok(())
 }

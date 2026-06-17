@@ -214,8 +214,9 @@ mod tests {
         assert_ne!(pixmap_vacio, pixmap_dibujado);
 
         // 4. Ejecutar deshacer (deshace el trazo)
-        let res_deshacer = deshacer_core(&state).unwrap();
-        assert_eq!(res_deshacer, Some("capa_test".to_string()));
+        let res_deshacer = deshacer_core(&state).unwrap().expect("deshacer debe retornar un resultado");
+        assert_eq!(res_deshacer.kind, "pixel");
+        assert_eq!(res_deshacer.layer_id, "capa_test");
 
         // Los píxeles deben haber vuelto a su estado vacío (fuzzy match ±1)
         let pixmap_tras_deshacer = {
@@ -230,8 +231,9 @@ mod tests {
         );
 
         // 5. Ejecutar rehacer (aplica el trazo nuevamente)
-        let res_rehacer = rehacer_core(&state).unwrap();
-        assert_eq!(res_rehacer, Some("capa_test".to_string()));
+        let res_rehacer = rehacer_core(&state).unwrap().expect("rehacer debe retornar un resultado");
+        assert_eq!(res_rehacer.kind, "pixel");
+        assert_eq!(res_rehacer.layer_id, "capa_test");
 
         // Los píxeles deben coincidir con el estado dibujado (fuzzy match ±1)
         let pixmap_tras_rehacer = {

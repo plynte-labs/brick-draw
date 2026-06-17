@@ -3,6 +3,7 @@ import { PuntoTrazo } from "../types/PuntoTrazo";
 import { LayerBounds } from "../types/LayerBounds";
 import { CanvasMetadataDto } from "../types/CanvasMetadataDto";
 import { ProyectoBrickResponse } from "../types/ProyectoBrickResponse";
+import { UndoResult } from "../types/UndoResult";
 
 export type TauriResult<T> =
   | { success: true; data: T }
@@ -213,18 +214,20 @@ export const cargarPngEnCapa = async (
 
 /**
  * Revierte la última acción en el historial de comandos de Rust.
- * Retorna el ID de la capa afectada para su resincronización en el frontend.
+ * Retorna un resultado estructurado (UndoResult) que describe QUÉ se revirtió
+ * (píxeles, movimiento, opacidad, visibilidad, borrado, reordenamiento o selección)
+ * para que el frontend resincronice el estado afectado.
  */
-export const deshacer = async (): Promise<TauriResult<string | null>> => {
-  return safeInvoke<string | null>("deshacer");
+export const deshacer = async (): Promise<TauriResult<UndoResult | null>> => {
+  return safeInvoke<UndoResult | null>("deshacer");
 };
 
 /**
  * Rehace la última acción descartada en el historial de comandos de Rust.
- * Retorna el ID de la capa afectada para su resincronización en el frontend.
+ * Retorna un UndoResult con la misma semántica que deshacer.
  */
-export const rehacer = async (): Promise<TauriResult<string | null>> => {
-  return safeInvoke<string | null>("rehacer");
+export const rehacer = async (): Promise<TauriResult<UndoResult | null>> => {
+  return safeInvoke<UndoResult | null>("rehacer");
 };
 
 /**

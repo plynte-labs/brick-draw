@@ -1,5 +1,5 @@
 // src-tauri/src/commands/draw.rs
-use crate::state::{AppState, HistoryDiff};
+use crate::state::{AppState, HistoryDiff, HistoryOp};
 use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -235,12 +235,7 @@ pub fn procesar_trazo_core(
     // ── PHASE 3: short outer write lock — push the HistoryDiff (ordering: AFTER the raster) ──
     if let Some(diff) = diff_to_save {
         let mut state_lock = state.write();
-        let history = &mut state_lock.history;
-        if history.undo_stack.len() >= history.max_steps {
-            history.undo_stack.remove(0);
-        }
-        history.undo_stack.push(diff);
-        history.redo_stack.clear();
+        state_lock.history.record(HistoryOp::PixelDiff(diff));
     }
 
     Ok(bounds_update)
@@ -292,11 +287,15 @@ mod tests {
             assert!(layer.buffer.read().width() > 32, "buffer must enlarge horizontally");
             assert!(layer.buffer.read().height() > 32, "buffer must enlarge vertically");
 
-            // Exactly one HistoryDiff, with the POST-resize offsets captured in Phase 1.
+            // Exactly one history op, a PixelDiff, with the POST-resize offsets captured in Phase 1.
             assert_eq!(s.history.undo_stack.len(), 1, "exactly one history entry pushed");
-            let diff = &s.history.undo_stack[0];
-            assert_eq!(diff.layer_x_at_snapshot, layer.x, "history snapshot offset must be post-resize x");
-            assert_eq!(diff.layer_y_at_snapshot, layer.y, "history snapshot offset must be post-resize y");
+            match &s.history.undo_stack[0] {
+                crate::state::HistoryOp::PixelDiff(diff) => {
+                    assert_eq!(diff.layer_x_at_snapshot, layer.x, "history snapshot offset must be post-resize x");
+                    assert_eq!(diff.layer_y_at_snapshot, layer.y, "history snapshot offset must be post-resize y");
+                }
+                _ => panic!("a stroke must push a PixelDiff op"),
+            }
         }
 
         // The stroke must actually mark pixels, and deshacer must restore them.
@@ -308,7 +307,9 @@ mod tests {
         assert!(painted_before_undo > 0, "stroke must paint at least one opaque pixel");
 
         let undone = deshacer_core(&state).unwrap();
-        assert_eq!(undone.as_deref(), Some("capa"), "undo targets the painted layer");
+        let undone = undone.expect("deshacer must return a result");
+        assert_eq!(undone.kind, "pixel", "a stroke undo is a pixel op");
+        assert_eq!(undone.layer_id, "capa", "undo targets the painted layer");
 
         let painted_after_undo = {
             let s = state.read();

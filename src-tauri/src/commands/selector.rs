@@ -2,7 +2,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tiny_skia::{Pixmap, PremultipliedColorU8, Transform, PixmapPaint};
 
-use crate::state::AppState;
+use crate::state::{AppState, HistoryOp};
 
 /// Maximum canvas dimension for flood fill — prevents OOM attacks
 const MAX_FLOOD_FILL_DIMENSION: u32 = 8192;
@@ -107,7 +107,11 @@ pub fn calcular_seleccion_varita_core(
 
     {
         let mut state_lock_mut = state.write();
-        state_lock_mut.active_selection = Some(global_mask.clone());
+        // Record the selection change as an inverse-capable op (prev mask -> new mask).
+        let prev_mask = state_lock_mut.active_selection.clone();
+        let next_mask = Some(global_mask.clone());
+        state_lock_mut.active_selection = next_mask.clone();
+        state_lock_mut.history.record(HistoryOp::Selection { prev_mask, next_mask });
     }
 
     match global_mask.encode_png() {
