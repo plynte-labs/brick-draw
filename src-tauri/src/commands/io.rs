@@ -445,7 +445,7 @@ pub fn guardar_proyecto_brick(
     let mut zip = zip::ZipWriter::new(file);
 
     // ── Opciones de compresión Deflate al máximo para los bytes crudos ──
-    let options = zip::write::FileOptions::default()
+    let options: zip::write::SimpleFileOptions = zip::write::FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .compression_level(Some(9));
 
