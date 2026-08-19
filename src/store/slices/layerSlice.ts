@@ -303,7 +303,7 @@ export const createLayerSlice: AppSlice<LayerSlice> = (set, get) => ({
               clampedArray = new Uint8ClampedArray(rawBytes as any);
             }
 
-            const imageData = new ImageData(clampedArray, width, height);
+            const imageData = new ImageData(clampedArray as any, width, height);
             ctx.putImageData(imageData, 0, 0);
           }
         }
