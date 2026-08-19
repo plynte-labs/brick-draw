@@ -6,7 +6,7 @@
 
 > **Contributor Notice**: Internal code identifiers (Rust commands, TypeScript function/variable names, code comments) are currently in Spanish. An English codebase translation is tracked as a future change (`i18n-codebase-english`).
 
-**Brick.Draw** is a lightweight creative desktop application. Its focus is minimizing RAM consumption — only what's strictly necessary.
+**Brick.Draw** is a lightweight (concept/prototype) creative desktop application. Its focus is minimizing RAM consumption — only what's strictly necessary.
 
 ## Public release notes
 
