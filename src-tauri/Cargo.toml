@@ -28,7 +28,7 @@ tauri-build = { version = "2.0.0", features = [] }
 # HYG-3: the `test` feature is NOT enabled here — production builds must not pull test scaffolding.
 # It is re-declared under [dev-dependencies] with `features = ["test"]`; Cargo unifies features across
 # the build graph, so test/dev builds still get it while `cargo build --release` does not.
-tauri = { version = "2.0.0" }
+tauri = { version = "2.0.0", features = [] }
 tauri-plugin-opener = "2.0.0"
 tauri-plugin-dialog = "2.0.0"
 parking_lot = "0.12"

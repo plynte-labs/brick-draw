@@ -1,7 +1,7 @@
 // src/store/slices/settingsSlice.ts
 import { AppSlice, SettingsSlice } from "../types";
 
-export const createSettingsSlice: AppSlice<SettingsSlice> = (set, get) => ({
+export const createSettingsSlice: AppSlice<SettingsSlice> = (set) => ({
   settings: {
     tool: "brush",
     color: "#e8cdbb",
@@ -24,7 +24,6 @@ export const createSettingsSlice: AppSlice<SettingsSlice> = (set, get) => ({
 
   setSettings: (newSettings) => {
     set((state) => ({ settings: { ...state.settings, ...newSettings } }));
-    get().forceRender();
   },
 
   setModifiers: (mods) =>

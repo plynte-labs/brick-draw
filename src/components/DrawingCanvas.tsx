@@ -5,7 +5,10 @@ import { useDrawingEngine } from "../hooks/useDrawingEngine";
 import { TransformGizmo } from "./TransformGizmo";
 
 export const DrawingCanvas = () => {
-    const { settings, camera, setCamera } = useAppStore();
+    const tool = useAppStore((state) => state.settings.tool);
+    const color = useAppStore((state) => state.settings.color);
+    const camera = useAppStore((state) => state.camera);
+    const setCamera = useAppStore((state) => state.setCamera);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const cursorDivRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -13,7 +16,7 @@ export const DrawingCanvas = () => {
     const { startDrawing, processPointerMove, selectionMaskRef, hasSelectionRef } =
         useDrawingEngine(canvasRef);
 
-    const isTransform = settings.tool === "transform";
+    const isTransform = tool === "transform";
 
     // 🚀 ZOOM MATEMÁTICO (Dirigido hacia el ratón)
     useEffect(() => {
@@ -121,7 +124,8 @@ export const DrawingCanvas = () => {
 
         // 🚀 FIX: Calculamos basado en el contenedor absoluto
         const rect = container.getBoundingClientRect();
-        const visualSize = settings.size * camera.zoom;
+        const currentSize = useAppStore.getState().settings.size;
+        const visualSize = currentSize * camera.zoom;
 
         const cursorX = e.clientX - rect.left;
         const cursorY = e.clientY - rect.top;
@@ -167,7 +171,7 @@ export const DrawingCanvas = () => {
                     ref={cursorDivRef}
                     className="pointer-events-none absolute top-0 left-0 rounded-full border border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)] z-[100] will-change-transform"
                     style={{
-                        backgroundColor: settings.tool === 'eraser' ? 'rgba(255,255,255,0.4)' : `${settings.color}33`,
+                        backgroundColor: tool === 'eraser' ? 'rgba(255,255,255,0.4)' : `${color}33`,
                         transform: 'translate(-9999px, -9999px)'
                     }}
                 />
