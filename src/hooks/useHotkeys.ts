@@ -197,6 +197,27 @@ export const useHotkeys = () => {
       }
 
       if (!e.ctrlKey && !e.altKey) {
+        if (e.key === "[" || e.code === "BracketLeft") {
+          e.preventDefault();
+          const currentSize = useAppStore.getState().settings.size;
+          const nextSize = Math.max(
+            1,
+            currentSize <= 10 ? currentSize - 1 : currentSize - 5
+          );
+          setSettings({ size: nextSize });
+          return;
+        }
+        if (e.key === "]" || e.code === "BracketRight") {
+          e.preventDefault();
+          const currentSize = useAppStore.getState().settings.size;
+          const nextSize = Math.min(
+            150,
+            currentSize < 10 ? currentSize + 1 : currentSize + 5
+          );
+          setSettings({ size: nextSize });
+          return;
+        }
+
         switch (e.key.toLowerCase()) {
           case "b":
             setSettings({ tool: "brush" });

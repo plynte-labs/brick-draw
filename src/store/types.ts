@@ -57,6 +57,10 @@ export interface UISlice {
   loadingMessage: string;
   loadingProgress: number;
   setLoading: (loading: boolean, message?: string, progress?: number) => void;
+
+  // 🚀 Estados de modales UI
+  isAIModalOpen: boolean;
+  setIsAIModalOpen: (open: boolean) => void;
 }
 
 export interface SettingsSlice {

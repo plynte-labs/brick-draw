@@ -1,0 +1,38 @@
+.app-titlebar {
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+.window-control {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  position: relative;
+  border-radius: 0;
+  width: 2.75rem;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.window-control:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.window-control:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.window-control-close:hover {
+  background: #c42b1c !important;
+  color: #ffffff !important;
+}
+
+.window-control-close:active {
+  background: #b22617 !important;
+  color: #ffffff !important;
+}

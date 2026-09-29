@@ -7,7 +7,7 @@ export const createUISlice: AppSlice<UISlice> = (set) => ({
   triggerRender: 0,
   isCanvasInitialized: false,
   canvasSize: { width: 0, height: 0 },
-  panelOrder: ["tools", "color", "layers"],
+  panelOrder: ["layers"],
   setPanelOrder: (newOrder) => set({ panelOrder: newOrder}),
 
   // 🚀 CÁMARA SIMPLIFICADA: Solo zoom y posición de scroll
@@ -52,4 +52,8 @@ export const createUISlice: AppSlice<UISlice> = (set) => ({
   loadingProgress: 0,
   setLoading: (loading, message = "", progress = 0) =>
     set({ isLoading: loading, loadingMessage: message, loadingProgress: progress }),
+
+  // ESTADO DE MODAL IA
+  isAIModalOpen: false,
+  setIsAIModalOpen: (open) => set({ isAIModalOpen: open }),
 });

@@ -5,6 +5,7 @@ import { EditorWorkspace } from "./components/Layout/EditorWorkspace";
 import { useRustSync } from "./hooks/useRustSync";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { openFileDialog } from "./services/tauriService";
+import { TitleBar } from "./components/WindowControls";
 import "./css/App.css";
 
 function App() {
@@ -36,15 +37,19 @@ function App() {
     };
 
     return (
-        <div className="w-screen h-screen bg-neutral-950 relative overflow-hidden">
-            {!isCanvasInitialized ? (
-                <CanvasSetupModal 
-                    onStart={(size) => initCanvas(size.width, size.height)} 
-                    onImport={handleImportProject}
-                />
-            ) : (
-                <EditorWorkspace />
-            )}
+        <div className="flex flex-col h-screen w-screen bg-neutral-950 overflow-hidden select-none">
+            <TitleBar />
+
+            <div className="flex-1 min-h-0 relative">
+                {!isCanvasInitialized ? (
+                    <CanvasSetupModal 
+                        onStart={(size) => initCanvas(size.width, size.height)} 
+                        onImport={handleImportProject}
+                    />
+                ) : (
+                    <EditorWorkspace />
+                )}
+            </div>
 
             {/* Pantalla de carga global (Glassmorphism & Gaming AAA Aesthetics) */}
             {isLoading && (
