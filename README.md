@@ -1,7 +1,7 @@
 # Brick.Draw (Tauri + React + TypeScript)
 <img width="1917" height="1021" alt="image" src="https://github.com/user-attachments/assets/f6633276-a76b-4dce-9d2a-2f0575b62514" />
 
-![Uploading image.png…]()
+<img width="1917" height="1016" alt="image" src="https://github.com/user-attachments/assets/f8510612-6b62-462f-b1e7-38612e107433" />
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/plynte-labs/brick-draw)](https://github.com/plynte-labs/brick-draw/stargazers)
