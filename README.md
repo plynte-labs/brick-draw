@@ -1,8 +1,13 @@
 # Brick.Draw (Tauri + React + TypeScript)
+<img width="1917" height="1021" alt="image" src="https://github.com/user-attachments/assets/f6633276-a76b-4dce-9d2a-2f0575b62514" />
+
+![Uploading image.png…]()
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/plynte-labs/brick-draw)](https://github.com/plynte-labs/brick-draw/stargazers)
 [![CI](https://github.com/plynte-labs/brick-draw/actions/workflows/ci.yml/badge.svg)](https://github.com/plynte-labs/brick-draw/actions/workflows/ci.yml)
+
+[Made using Antigravity]
 
 > **Contributor Notice**: Internal code identifiers (Rust commands, TypeScript function/variable names, code comments) are currently in Spanish. An English codebase translation is tracked as a future change (`i18n-codebase-english`).
 
